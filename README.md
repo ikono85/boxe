@@ -2,8 +2,8 @@
 
 Jeu de boxe arcade en vue subjective, jouable dans le navigateur (PC, clavier + souris).
 HTML5, CSS3, JavaScript (modules ES), Three.js, Vite. Aucun fichier 3D, image ou son à
-télécharger : le ring 3D est intégré au jeu, le reste est généré au lancement (boxeurs en
-primitives, textures en canvas, sons synthétisés), et chaque élément peut être remplacé par
+télécharger : le ring 3D et les personnages sont intégrés au jeu, le reste est généré au
+lancement (textures en canvas, sons synthétisés), et chaque élément peut être remplacé par
 de vrais fichiers.
 
 ## Lancer le jeu
@@ -80,9 +80,9 @@ Les touches sont déclarées par position physique (`KeyboardEvent.code`) dans
 
 | Niveau | Boxeur | Comportement |
 | --- | --- | --- |
-| Débutant | Léo « Le Rookie » Martin | Attaque peu, garde souvent, coups très lisibles, se déplace en ligne droite |
-| Équilibré | Marco « La Tempête » Reyes | Attaque régulièrement, esquive, bloque, contre parfois, tourne autour de vous |
-| Expert | Viktor « Le Marteau » Kral | Analyse vos habitudes (coup favori, enchaînements, esquives préférées), contre, feinte, varie ses coups, gère son souffle et passe à l'attaque dès que vous êtes touché |
+| Débutant | Léo « Le Rookie » Martin (personnage `casual`) | Attaque peu, garde souvent, coups très lisibles, se déplace en ligne droite |
+| Équilibré | Marco « La Tempête » Reyes (personnage `beach`) | Attaque régulièrement, esquive, bloque, contre parfois, tourne autour de vous |
+| Expert | Viktor « Le Marteau » Kral (personnage `worker`) | Analyse vos habitudes (coup favori, enchaînements, esquives préférées), contre, feinte, varie ses coups, gère son souffle et passe à l'attaque dès que vous êtes touché |
 
 L'IA (`src/game/AI.js`) ne triche pas : elle passe par les mêmes règles que le joueur
 (endurance, timings, détection). Elle gère la distance, tourne pour ne pas rester dans les
@@ -114,7 +114,8 @@ src/
  │   ├── PunchSystem.js      machine à états des coups, combos, buffer d'entrée
  │   ├── HitDetection.js     balayage gant / volumes (tête, corps, gardes)
  │   └── StaminaSystem.js    endurance
- ├── characters/             BoxerModel (adversaire + IK), FirstPersonArms (gants FPS), GloveFactory, Rig
+ ├── characters/             RiggedBoxerModel (personnage 3D riggé), BoxerModel (pose + repli en primitives),
+ │                           FirstPersonArms (gants FPS), GloveFactory, Rig
  ├── world/                  Arena, Ring (cordes déformables), Lighting, Audience, Textures
  ├── fx/                     CameraRig (secousses, chute KO), ImpactEffects, ScreenEffects
  ├── ui/                     HUD, Menu, PauseMenu, OptionsPanel, RoundOverlay, ResultScreen
@@ -138,6 +139,9 @@ Principes :
 
 - **Un nouveau boxeur** : une entrée dans `BOXERS` (`config/Boxers.js`), puis
   `opponent: 'sonId'` dans un profil de `Difficulty.js`.
+- **Un nouveau personnage 3D** : un .glb au squelette Quaternius (`Hips`, `Chest`,
+  `UpperArm.L`…) dans `src/assets/models/characters/`, une ligne dans `CHARACTER_MODELS`
+  (`characters/RiggedBoxerModel.js`), puis `look.model` sur le boxeur.
 - **Un skin de gants** : une entrée dans `GLOVE_SKINS` ; `gloves: 'sonNom'` sur un boxeur.
 - **Un niveau d'IA** : copiez un profil de `Difficulty.js` et ajoutez-le à `DIFFICULTY_ORDER`.
 - **Équilibrage** : `Punches.js` (dégâts, coûts, timings) et `GameConfig.js`.
@@ -152,6 +156,8 @@ Principes :
   (https://sketchfab.com/3d-models/professional-boxing-ring-a2b5a268fc5149e78ccf4bbe2a64b399),
   licence CC BY 4.0. Allégé (447 000 → 25 000 triangles) et adapté par
   `scripts/optimize-ring.mjs` ; détails dans `src/assets/models/README.md`.
+- Adversaires : personnages « Ultimate Modular Men » de Quaternius (https://quaternius.com),
+  domaine public (CC0) ; bras allongés au chargement pour l'allonge des coups.
 
 ## Performances
 

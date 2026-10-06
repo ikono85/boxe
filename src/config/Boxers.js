@@ -5,6 +5,10 @@
  * (tale of the tape). Pour ajouter un boxeur, il suffit d'ajouter une entrée :
  * le modèle 3D, l'IA et l'interface lisent tout ici.
  *
+ * look.model : personnage 3D riggé (clé de CHARACTER_MODELS dans
+ * characters/RiggedBoxerModel.js). Sans cette clé, le boxeur est construit en
+ * primitives (BoxerModel) à partir des autres champs de `look`.
+ *
  * stats :
  *   power        multiplicateur de dégâts
  *   speed        multiplicateur de vitesse des coups
@@ -36,6 +40,7 @@ export const BOXERS = {
     look: {
       skin: '#e2b08a', hair: '#4a2c18', hairStyle: 'crop', beard: false,
       shorts: '#1f8a52', trim: '#f4f1e6', shoes: '#f2f2f2', build: 0.94, height: 1.0,
+      model: 'casual', // personnage 3D (characters/RiggedBoxerModel.js)
     },
     tape: { age: 21, height: 178, reach: 180, weight: 71, record: '4-3-0', kos: 1 },
     style: 'Garde fermée, attaque peu, se déplace en ligne droite.',
@@ -52,6 +57,7 @@ export const BOXERS = {
     look: {
       skin: '#a8714c', hair: '#161211', hairStyle: 'fade', beard: true,
       shorts: '#1d4fd8', trim: '#f5c542', shoes: '#16181d', build: 1.0, height: 0.98,
+      model: 'beach',
     },
     tape: { age: 27, height: 175, reach: 179, weight: 70, record: '19-4-1', kos: 11 },
     style: 'Rythme régulier, esquive, bloque et contre de temps en temps.',
@@ -68,6 +74,7 @@ export const BOXERS = {
     look: {
       skin: '#e8c3a3', hair: '#c9b48a', hairStyle: 'buzz', beard: false,
       shorts: '#0f1115', trim: '#d62828', shoes: '#0f1115', build: 1.08, height: 1.04,
+      model: 'worker',
     },
     tape: { age: 31, height: 188, reach: 193, weight: 84, record: '31-1-0', kos: 24 },
     style: 'Lit vos habitudes, contre, gère son souffle et cherche le KO.',

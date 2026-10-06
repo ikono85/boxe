@@ -53,6 +53,9 @@ const _knee = new Vector3();
 const _foot = new Vector3();
 const _local = new Vector3();
 
+export const BOXER_PELVIS_Y = PELVIS_Y;
+export const BOXER_ANKLE_Y = ANKLE_Y;
+
 export class BoxerModel {
   constructor(profile) {
     this.root = new Group();
@@ -177,6 +180,7 @@ export class BoxerModel {
         hand, side: hand === 'left' ? -1 : 1, upper, fore, glove,
         shoulderLocal: new Vector3((hand === 'left' ? -0.205 : 0.205) * build, 0.43, 0),
         pos: new Vector3(), quat: new Quaternion(),
+        wrist: new Vector3(), pole: new Vector3(), // cibles IK (repère « body »), lues par RiggedBoxerModel
       };
     }
 
@@ -199,6 +203,7 @@ export class BoxerModel {
         hipLocal: new Vector3(side * 0.1 * build, -0.07, 0),
         // Garde orthodoxe : pied gauche devant
         stance: new Vector3(side * 0.15, ANKLE_Y, side < 0 ? -0.17 : 0.17),
+        foot: new Vector3(), pole: new Vector3(), // cibles IK (repère « body »)
       };
     }
 
@@ -453,6 +458,8 @@ export class BoxerModel {
     _wr.set(0, 0, GLOVE_WRIST_OFFSET * 1.03).applyQuaternion(arm.quat).add(arm.pos);
     const hookW = punch.active && punch.def && punch.def.kind === 'hook' ? clamp(punch.extension * 1.5, 0, 1) : 0;
     _pole.copy(_sh).add(_v.set(side * (0.35 + hookW * 0.35), -0.6 + hookW * 0.55, 0.25));
+    arm.wrist.copy(_wr);
+    arm.pole.copy(_pole);
     solveTwoBone(_sh, _wr, ST.upperArm, ST.forearm, _pole, _el);
     placeBone(arm.upper, _sh, _el, ST.upperArm);
     placeBone(arm.fore, _el, _wr, ST.forearm);
@@ -485,6 +492,8 @@ export class BoxerModel {
         _foot.x += side * 0.06 * buckle;
       }
       _pole.copy(_hip).add(_v.set(side * 0.08, -0.3, -0.7));
+      leg.foot.copy(_foot);
+      leg.pole.copy(_pole);
       solveTwoBone(_hip, _foot, THIGH, SHIN, _pole, _knee);
       placeBone(leg.thigh, _hip, _knee, THIGH);
       placeBone(leg.shin, _knee, _foot, SHIN);

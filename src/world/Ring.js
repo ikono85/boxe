@@ -23,8 +23,7 @@ import {
   Group, Mesh, BoxGeometry, PlaneGeometry, CylinderGeometry, BufferGeometry, BufferAttribute,
   MeshStandardMaterial, Vector3, Sphere, Box3,
 } from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { loadGlb } from '../core/loadGlb.js';
 import { GameConfig } from '../config/GameConfig.js';
 import { createRingMatTexture, createApronTexture } from './Textures.js';
 
@@ -43,23 +42,6 @@ const PROCEDURAL_STYLE = {
 /** Couleurs des cordes du modèle (bas → haut) : rouge, bleu, noir, rouge. */
 const MODEL_ROPE_COLORS = ['#c8161d', '#1f63c9', '#2a2b30', '#c8161d'];
 
-/** Charge un .glb depuis une URL (data: décodée sur place, sans requête réseau). */
-async function loadGlb(url) {
-  let buffer;
-  if (url.startsWith('data:')) {
-    const bin = atob(url.slice(url.indexOf(',') + 1));
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    buffer = bytes.buffer;
-  } else {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`ring : ${res.status}`);
-    buffer = await res.arrayBuffer();
-  }
-  const loader = new GLTFLoader();
-  loader.setMeshoptDecoder(MeshoptDecoder);
-  return loader.parseAsync(buffer, '');
-}
 
 /** Un côté de corde, maillé à la main pour pouvoir le déformer. */
 class RopeSide {

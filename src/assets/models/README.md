@@ -17,3 +17,10 @@ l'échelle, fusion des pièces, textures réduites, géométrie compressée (mes
 Pour le régénérer ou préparer un autre ring : téléchargez le modèle au format glTF, puis
 `node scripts/optimize-ring.mjs <dossier contenant scene.gltf>` (adaptez les noms de
 matières en tête du script pour un autre modèle).
+
+## Personnages
+
+`characters/casual.glb`, `beach.glb`, `worker.glb` : « Ultimate Modular Men » par Quaternius
+(https://quaternius.com), licence CC0 (domaine public, voir `LICENSE-Quaternius.txt`).
+`characters/RiggedBoxerModel.js` les anime à partir de la pose calculée par `BoxerModel`
+(IK bras et jambes, colonne, tête) et allonge leurs bras au chargement.
