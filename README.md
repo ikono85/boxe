@@ -18,7 +18,10 @@ npm run simulate          # banc d'essai sans rendu : esquives + combats IA simu
 npm run optimize:ring <dossier>  # prépare un modèle de ring glTF pour le jeu
 ```
 
-Node 20.19+ ou 22.12+ (Vite 8). `?debug` dans l'URL expose l'objet du jeu dans la console
+Node 20.19+ ou 22.12+ (Vite 8).
+
+**En ligne : https://ikono85.github.io/boxe/** — publié automatiquement par GitHub Actions
+(`.github/workflows/deploy.yml`) à chaque push sur `main`. `?debug` dans l'URL expose l'objet du jeu dans la console
 (`window.__boxing`).
 
 ## Commandes
