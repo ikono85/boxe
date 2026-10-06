@@ -65,7 +65,7 @@ export class OnlinePanel {
   home(prefillCode = '') {
     this._cancelSession();
     const s = this.settings;
-    const model = MODELS.includes(s.get('netModel')) ? s.get('netModel') : MODELS[0];
+    const model = MODELS.includes(s.get('netSkin')) ? s.get('netSkin') : MODELS[0];
     const notice = this.notice;
     this.notice = null;
     const blocked = !webrtcAvailable();
@@ -107,7 +107,7 @@ export class OnlinePanel {
       const b = e.target.closest('button');
       if (!b) return;
       this.onSound('ui_click');
-      s.set('netModel', b.dataset.v);
+      s.set('netSkin', b.dataset.v);
       this.$.model.querySelectorAll('button').forEach((x) => {
         x.classList.toggle('on', x === b);
         x.setAttribute('aria-checked', String(x === b));
@@ -138,7 +138,7 @@ export class OnlinePanel {
     return {
       role: null, kind, format,
       name: this.settings.get('netName'),
-      model: this.settings.get('netModel'),
+      model: this.settings.get('netSkin'),
     };
   }
 

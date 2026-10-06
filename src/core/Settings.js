@@ -22,7 +22,7 @@ export const DEFAULT_SETTINGS = {
   rounds: 3,
   roundDuration: 60,
   netName: '', // en ligne : nom affiché à l'adversaire
-  netModel: 'xbot', // en ligne : personnage
+  netSkin: 'xbot', // en ligne : personnage (ancienne clé netModel ignorée : X Bot par défaut)
 };
 
 function safeRead(key) {
