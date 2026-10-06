@@ -12,6 +12,15 @@ export function setSeed(seed) {
   state = seed >>> 0;
 }
 
+/** État interne du générateur (sauvegarde / restauration : netcode, replays). */
+export function getRandomState() {
+  return state;
+}
+
+export function setRandomState(s) {
+  state = s >>> 0;
+}
+
 export function random() {
   state = (state + 0x6d2b79f5) >>> 0;
   let t = state;

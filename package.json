@@ -10,9 +10,11 @@
     "preview": "vite preview",
     "build:standalone": "vite build && node scripts/build-standalone.mjs",
     "simulate": "node scripts/simulate.mjs",
-    "optimize:ring": "node scripts/optimize-ring.mjs"
+    "optimize:ring": "node scripts/optimize-ring.mjs",
+    "test": "node --test tests/net.test.mjs"
   },
   "dependencies": {
+    "peerjs": "^1.5.5",
     "three": "^0.186.1"
   },
   "devDependencies": {

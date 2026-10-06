@@ -1409,3 +1409,128 @@ kbd {
   outline: 2px solid var(--gold);
   outline-offset: 2px;
 }
+
+/* ------------------------------------------------------------------ */
+/* En ligne                                                            */
+/* ------------------------------------------------------------------ */
+.online {
+  display: grid;
+  gap: 0.9rem;
+}
+.online .field {
+  margin: 0;
+}
+.net-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.55rem 0.7rem;
+  background: rgba(242, 234, 214, 0.06);
+  border: 1px solid var(--line-strong);
+  color: var(--canvas);
+  font: 600 1.05rem var(--text);
+  user-select: text;
+}
+.net-input:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+.net-input.code {
+  width: 8.5rem;
+  font-family: var(--display);
+  font-size: 1.5rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+.net-actions {
+  display: grid;
+  gap: 0.55rem;
+}
+.net-actions .btn,
+.results-actions .btn[data-action="rematch"] {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  text-align: left;
+}
+.net-actions .btn small,
+.results-actions .btn small {
+  font: 500 0.82rem var(--text);
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 0.85;
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.btn.quiet {
+  justify-self: start;
+  border-color: transparent;
+  color: var(--muted);
+}
+.net-join-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+.net-msg {
+  min-height: 1.2em;
+  margin: 0.3rem 0 0;
+  color: var(--danger);
+  font-size: 0.9rem;
+}
+.netcode {
+  font-family: var(--display);
+  font-weight: 900;
+  font-size: clamp(2.6rem, 6vw, 4rem);
+  letter-spacing: 0.28em;
+  color: var(--gold);
+  user-select: text;
+}
+.net-status {
+  margin: 0;
+  color: var(--canvas);
+  font-weight: 600;
+}
+.net-status.busy::before {
+  content: '';
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  margin-right: 0.55rem;
+  border-radius: 50%;
+  background: var(--gold);
+  animation: net-pulse 1.1s ease-in-out infinite;
+}
+@keyframes net-pulse {
+  50% { opacity: 0.25; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .net-status.busy::before { animation: none; }
+}
+.net-notice {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.7rem 0.9rem;
+  border-left: 3px solid var(--danger);
+  background: rgba(255, 74, 61, 0.08);
+  font-size: 0.95rem;
+}
+.net-notice.good {
+  border-left-color: var(--gold);
+  background: rgba(240, 185, 58, 0.1);
+}
+.net-notice a {
+  color: inherit;
+  text-decoration: underline;
+}
+.final-score .num.small {
+  font-size: 1.6rem;
+}
+.net-bad {
+  color: var(--danger);
+}
+.btn[hidden] {
+  display: none;
+}

@@ -62,9 +62,18 @@ export class PauseMenu {
     return !this.$.opts.hidden;
   }
 
-  show() {
+  /**
+   * @param {boolean} online en ligne : pas de pause (le combat continue derrière
+   * ce menu) ; « Quitter » devient « Abandonner » (victoire par forfait pour l'autre).
+   */
+  show(online = false) {
     this.el.hidden = false;
-    this.setHint('');
+    const q = (a) => this.el.querySelector(`[data-action="${a}"]`);
+    this.el.querySelector('h2').textContent = online ? 'Quitter le duel ?' : 'PAUSE';
+    q('restart').hidden = online;
+    q('resume').textContent = online ? 'Reprendre le combat' : 'Reprendre';
+    q('quit').textContent = online ? 'Abandonner' : 'Quitter le combat';
+    this.setHint(online ? 'Pas de pause en ligne : le combat continue derrière ce menu et votre boxeur ne bouge plus. Abandonner donne la victoire à votre adversaire.' : '');
     this._showMain();
   }
 

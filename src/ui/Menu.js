@@ -1,7 +1,7 @@
 /**
  * Menu.js
  * ------------------------------------------------------------------
- * Écran d'accueil BOXING ARENA : JOUER, DIFFICULTÉ, OPTIONS, COMMANDES.
+ * Écran d'accueil BOXING ARENA : JOUER, EN LIGNE, DIFFICULTÉ, OPTIONS, COMMANDES.
  * Le panneau de droite affiche l'affiche du combat (« tale of the tape ») ou
  * le sous-menu choisi. La salle 3D tourne en arrière-plan.
  */
@@ -34,6 +34,7 @@ export class Menu {
           <p class="tagline">Boxe en vue subjective. Trois rounds, un adversaire qui vous lit.</p>
           <ul class="menu-list" role="menu">
             <li><button class="menu-item primary" type="button" data-action="play">Jouer</button></li>
+            <li><button class="menu-item" type="button" data-action="online">En ligne <small>1 contre 1</small></button></li>
             <li><button class="menu-item" type="button" data-action="difficulty">Difficulté <small data-id="diffLabel"></small></button></li>
             <li><button class="menu-item" type="button" data-action="options">Options</button></li>
             <li><button class="menu-item" type="button" data-action="controls">Commandes</button></li>
@@ -56,14 +57,23 @@ export class Menu {
       const a = b.dataset.action;
       this.onSound('ui_click');
       if (a === 'play') this.onPlay();
-      else this.showPanel(this.panel === a ? 'poster' : a);
+      else {
+        if (a === 'online' && this.online && this.panel !== 'online') this.online.home();
+        this.showPanel(this.panel === a ? 'poster' : a);
+      }
     });
     this.el.querySelectorAll('.menu-item').forEach((b) => b.addEventListener('mouseenter', () => this.onSound('ui_hover')));
     this.showPanel('poster');
   }
 
-  show() {
+  /** Branche l'écran En ligne (ui/OnlinePanel.js) dans le panneau de droite. */
+  setOnlinePanel(panel) {
+    this.online = panel;
+  }
+
+  show(panel = null) {
     this.el.hidden = false;
+    if (panel) this.panel = panel;
     this.refresh();
   }
 
@@ -85,7 +95,9 @@ export class Menu {
     this.panel = name;
     const p = this.$.panel;
     p.innerHTML = '';
-    if (name === 'options') {
+    if (name === 'online' && this.online) {
+      p.appendChild(this.online.el);
+    } else if (name === 'options') {
       this.options.refresh();
       p.appendChild(this.options.el);
     } else if (name === 'difficulty') p.appendChild(this._difficultyPanel());

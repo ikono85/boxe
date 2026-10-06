@@ -31,7 +31,6 @@ const _a = new Vector3();
 const _rest = new Vector3();
 const _tmp = new Vector3();
 
-let serial = 0;
 
 const STRIKE_EASE = {
   straight: Ease.punch,
@@ -124,6 +123,7 @@ export class PunchSystem {
     this.chain = [];
     this.lastEndTime = -10;
     this.now = 0;
+    this.serial = 0; // numéro du dernier coup (propre à ce boxeur : état rejouable)
     // Mémoriser aussi les coups demandés pendant un empêchement bref (recul, début
     // d'esquive). Utile aux humains ; l'IA, elle, décide image par image.
     this.bufferThroughFlinch = !!fighter.isPlayer;
@@ -225,7 +225,7 @@ export class PunchSystem {
     const speed = f.stats.speed * f.stamina.speedFactor();
 
     p.def = def;
-    p.serial = ++serial;
+    p.serial = ++this.serial;
     p.phase = 'windup';
     p.time = 0;
     p.windup = (def.windup * f.windupMultiplier * (chained ? CC.chainWindupFactor : 1)) / speed;

@@ -14,12 +14,14 @@ import { GameConfig } from '../config/GameConfig.js';
 import { PUNCH_ACTIONS } from '../config/Controls.js';
 import { PUNCHES } from '../config/Punches.js';
 import { clamp, lerp, wrapAngle, yawFromDirection } from '../core/MathUtils.js';
+import { commandFromInput, pressedMask, emptyCommand } from '../net/Command.js';
 
 const CAM = GameConfig.camera;
 const AIM = GameConfig.aim;
 const VM = GameConfig.viewmodel;
 
 const _look = { x: 0, y: 0 };
+const _cmd = emptyCommand();
 const _fwd = new Vector3();
 
 export class Player extends Fighter {
@@ -31,6 +33,9 @@ export class Player extends Fighter {
     this.sensitivity = 1;
     this.invertY = false;
     this.aimAssist = true;
+    // Cône de ciblage des coups. null = selon l'aide à la visée (solo). En ligne,
+    // une valeur commune aux deux boxeurs (règle du combat, pas un réglage local).
+    this.targetCone = null;
     this.target = new Vector3();
     this.pendingDuck = -1; // Maj seule : on attend une éventuelle direction
     this.lookLocked = false; // présentation du round : on reste face à l'adversaire
@@ -46,37 +51,55 @@ export class Player extends Fighter {
   }
 
   /**
-   * Lit les entrées et les convertit en intentions.
+   * Lit les entrées et les convertit en intentions (mode solo).
+   * La souris oriente le regard tout de suite ; le reste passe par une commande,
+   * exactement comme en ligne (voir applyCommand).
    * @param {import('../core/Input.js').Input} input
    * @param {number} dt temps réel (la visée n'est pas ralentie par les ralentis)
    */
   handleInput(input, dt) {
-    // --- Regard ---
+    this.updateView(input, dt, this);
+    this._updateAimInfo();
+    const cmd = commandFromInput(input, this.yaw, this.pitch, pressedMask(input), _cmd);
+    this.applyCommand(cmd, dt);
+  }
+
+  /**
+   * Regard à la souris (+ aide à la visée) appliqué à `view` ({ yaw, pitch }) :
+   * le boxeur lui-même en solo, une vue locale en ligne.
+   */
+  updateView(input, dt, view) {
     input.consumeLook(_look); // toujours consommé : rien ne s'accumule pendant un verrouillage
     const sens = CAM.baseSensitivity * this.sensitivity;
     if (!this.ko && !this.lookLocked) {
-      this.yaw -= _look.x * sens;
-      this.pitch -= _look.y * sens * (this.invertY ? -1 : 1);
-      this.yaw -= input.edgeTurn() * 2.4 * dt;
-      this.pitch = clamp(this.pitch, CAM.pitchMin, CAM.pitchMax);
+      view.yaw -= _look.x * sens;
+      view.pitch -= _look.y * sens * (this.invertY ? -1 : 1);
+      view.yaw -= input.edgeTurn() * 2.4 * dt;
+      view.pitch = clamp(view.pitch, CAM.pitchMin, CAM.pitchMax);
     }
-
-    const opp = this.opponent;
-    let mx = (input.isDown('right') ? 1 : 0) - (input.isDown('left') ? 1 : 0);
-    let mz = (input.isDown('forward') ? 1 : 0) - (input.isDown('back') ? 1 : 0);
-
     // --- Aide à la visée : rotation douce vers l'adversaire ---
+    const opp = this.opponent;
     if (this.aimAssist && opp && !opp.ko && !this.frozen) {
+      const mx = (input.isDown('right') ? 1 : 0) - (input.isDown('left') ? 1 : 0);
       const dx = opp.position.x - this.position.x;
       const dz = opp.position.z - this.position.z;
-      const err = wrapAngle(yawFromDirection(dx, dz) - this.yaw);
+      const err = wrapAngle(yawFromDirection(dx, dz) - view.yaw);
       if (Math.abs(err) < AIM.softLockCone) {
         const strength = AIM.softLockStrength * (mx !== 0 ? 1 : 0.45) * (input.fallbackMode ? 2 : 1);
-        this.yaw += err * (1 - Math.exp(-strength * dt));
+        view.yaw += err * (1 - Math.exp(-strength * dt));
       }
     }
+  }
 
-    this._updateAimInfo();
+  /**
+   * Applique une commande (voir net/Command.js). Déterministe : en ligne, les
+   * deux navigateurs l'appliquent au même tick avec les mêmes valeurs.
+   */
+  applyCommand(c, dt) {
+    if (!this.ko && !this.lookLocked) {
+      this.yaw = c.yaw;
+      this.pitch = clamp(c.pitch, CAM.pitchMin, CAM.pitchMax);
+    }
 
     if (this.frozen || this.ko) {
       this.setMoveInput(0, 0);
@@ -85,12 +108,14 @@ export class Player extends Fighter {
       return;
     }
 
+    let mx = c.mx;
+    let mz = c.mz;
+
     // --- Esquives ---
-    const dodgeHeld = input.isDown('dodge');
-    const dirPressed = input.pressed('left') || input.pressed('right') || input.pressed('back') || input.pressed('forward');
-    if (input.pressed('duck')) {
+    const dodgeHeld = c.dodgeHeld;
+    if (c.duck) {
       this.tryDodge('duck');
-    } else if (input.pressed('dodge') || (dodgeHeld && dirPressed)) {
+    } else if (c.dodge || (dodgeHeld && c.dirPressed)) {
       if (mx !== 0) this.tryDodge('slip', mx);
       else if (mz < 0) this.tryDodge('pullback');
       else if (mz > 0) this.tryDodge('duck');
@@ -120,12 +145,11 @@ export class Player extends Fighter {
     this.setMoveInput(mx, mz);
 
     // --- Garde (regarder vers le bas = garde basse) ---
-    const guard = input.isDown('guard');
-    this.setGuard(guard, guard && this.pitch < -0.27);
+    this.setGuard(c.guard, c.guard && this.pitch < -0.27);
 
     // --- Coups ---
-    for (const action of PUNCH_ACTIONS) {
-      if (input.pressed(action)) this.tryPunch(action);
+    for (let i = 0; i < PUNCH_ACTIONS.length; i++) {
+      if (c.punches & (1 << i)) this.tryPunch(PUNCH_ACTIONS[i]);
     }
   }
 
@@ -137,7 +161,7 @@ export class Player extends Fighter {
     const dz = opp.position.z - this.position.z;
     const dist = Math.hypot(dx, dz);
     const err = Math.abs(wrapAngle(yawFromDirection(dx, dz) - this.yaw));
-    const cone = this.aimAssist ? AIM.assistCone : AIM.noAssistCone;
+    const cone = this.targetCone != null ? this.targetCone : this.aimAssist ? AIM.assistCone : AIM.noAssistCone;
     this.aim.onTarget = err <= cone && !opp.ko;
     this.aim.inRange = dist <= PUNCHES.cross.reach + 0.22;
     this.aim.zone = this._zoneFromPitch(dist);
@@ -185,7 +209,7 @@ export class Player extends Fighter {
     const dz = opp.position.z - this.position.z;
     const dist = Math.hypot(dx, dz);
     const err = Math.abs(wrapAngle(yawFromDirection(dx, dz) - this.yaw));
-    const cone = this.aimAssist ? AIM.assistCone : AIM.noAssistCone;
+    const cone = this.targetCone != null ? this.targetCone : this.aimAssist ? AIM.assistCone : AIM.noAssistCone;
 
     if (err <= cone && !opp.ko) {
       const z = zone || this._zoneFromPitch(dist);

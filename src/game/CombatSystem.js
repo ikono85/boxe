@@ -40,8 +40,9 @@ export class CombatSystem {
       dir: new Vector3(), zone: 'head', blocked: false, crit: false, punch: null,
     };
     // Étourdissement infligé : compté pour l'attaquant
+    // (seulement pour les boxeurs de ce système : en ligne, la simulation a son propre bus)
     events.on('fighter:stunned', ({ fighter }) => {
-      if (fighter.opponent) fighter.opponent.matchStats.stuns++;
+      if (fighter.opponent && (fighter === this.a || fighter === this.b)) fighter.opponent.matchStats.stuns++;
     });
   }
 

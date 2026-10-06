@@ -74,17 +74,21 @@ export class ResultScreen {
           <div class="results-title">
             <h2 class="${isKO ? 'ko' : ''}">${esc(title)}</h2>
             <div class="verdict ${won ? 'win' : 'lose'}">${esc(verdict)}</div>
-            <div class="method">${esc(method)} · ${esc(ctx.difficultyLabel)}</div>
+            <div class="method">${esc(method)} · ${esc(ctx.online ? 'En ligne' : ctx.difficultyLabel)}</div>
           </div>
-          <div class="final-score">
+          ${ctx.online ? `<div class="final-score">
+            <div class="lab">En ligne</div>
+            <div class="num small">${esc(ctx.online.foe)}</div>
+          </div>` : `<div class="final-score">
             <div class="lab">Score final</div>
             <div class="num">${num(ctx.score)}</div>
             ${ctx.newRecord ? '<div class="rec">Nouveau record !</div>' : `<div class="lab">Record : ${num(ctx.best)}</div>`}
-          </div>
+          </div>`}
         </div>
         <div class="results-actions">
-          <button class="btn primary" type="button" data-action="replay">Rejouer</button>
-          <button class="btn" type="button" data-action="menu">Menu</button>
+          ${ctx.online
+    ? '<button class="btn primary" type="button" data-action="rematch"></button><button class="btn" type="button" data-action="menu">Quitter</button>'
+    : '<button class="btn primary" type="button" data-action="replay">Rejouer</button><button class="btn" type="button" data-action="menu">Menu</button>'}
         </div>
         <div class="results-grid">
           <div class="results-card">
@@ -104,9 +108,32 @@ export class ResultScreen {
       if (!b) return;
       this.onSound('ui_click');
       if (b.dataset.action === 'replay') this.onReplay();
+      else if (b.dataset.action === 'rematch') {
+        if (this.online && !b.disabled) this.online.onRematch();
+      } else if (this.online) this.online.onQuit();
       else this.onMenu();
     });
-    const replay = this.el.querySelector('[data-action="replay"]');
+    this.online = ctx.online || null;
+    if (this.online) this.updateOnline(this.online);
+    const replay = this.el.querySelector('[data-action="replay"], [data-action="rematch"]');
     if (replay) replay.focus({ preventScroll: true });
+  }
+
+  /**
+   * En ligne : état du bouton Revanche.
+   * @param {{foe, mine: boolean, theirs: boolean, gone: boolean}} o
+   */
+  updateOnline(o) {
+    const b = this.el.querySelector('[data-action="rematch"]');
+    if (!b) return;
+    let label = 'Revanche';
+    let sub = 'Même adversaire, même format';
+    if (o.gone) sub = `${o.foe} est parti`;
+    else if (o.mine) {
+      label = 'Revanche demandée';
+      sub = o.theirs ? 'C’est parti' : `En attente de ${o.foe}`;
+    } else if (o.theirs) sub = `${o.foe} veut une revanche !`;
+    b.innerHTML = `${esc(label)}<small>${esc(sub)}</small>`;
+    b.disabled = !!o.gone || !!o.mine;
   }
 }

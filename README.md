@@ -15,6 +15,7 @@ npm run build             # build de production dans dist/
 npm run preview           # sert dist/
 npm run build:standalone  # dist-standalone/boxing-arena.html : un seul fichier, s'ouvre par double-clic
 npm run simulate          # banc d'essai sans rendu : esquives + combats IA simulés
+npm test                  # netcode : déterminisme, sauvegarde/restauration, rollback
 npm run optimize:ring <dossier>  # prépare un modèle de ring glTF pour le jeu
 ```
 
@@ -76,6 +77,45 @@ Les touches sont déclarées par position physique (`KeyboardEvent.code`) dans
   partielle et conseil du coin. Sans KO, trois juges notent chaque round (système des
   10 points) : décision unanime, partagée, majoritaire ou match nul.
 
+## En ligne (1 contre 1)
+
+Même fonctionnement que Dohyo Duel : menu **En ligne**, chacun sur son écran.
+
+| Mode | Comment |
+| --- | --- |
+| Partie rapide | Adversaire au hasard, 3 rounds de 60 s. Six emplacements fixes où un joueur attend qu'un autre le rejoigne. |
+| Duel privé | Vous recevez un code de 5 lettres (et un lien `#duel=CODE`) à envoyer à votre ami. Format : celui de l'hôte (menu Difficulté). |
+| Rejoindre avec un code | Tapez le code de votre ami, ou ouvrez simplement son lien. |
+
+Chaque joueur choisit son nom et son boxeur (short rouge, t-shirt, gilet orange). Revanche
+à la fin du combat ; quitter pendant un combat donne la victoire par forfait à l'autre.
+
+**Pas de serveur de jeu** : les deux navigateurs se connectent directement (WebRTC). Le
+serveur public gratuit de PeerJS sert uniquement à se trouver (le code du duel est un
+identifiant PeerJS) ; il est libéré dès que le combat commence.
+
+**Netcode à rollback** (`src/net/`) :
+
+- la simulation du combat est déterministe et avance par pas fixes de 1/60 s
+  (`OnlineWorld.js`) ; on n'échange que les commandes (`Command.js` : déplacement, garde,
+  esquives, coups et direction du regard, 3 entiers par tick), appliquées 2 ticks plus tard ;
+- la commande adverse qui n'est pas encore arrivée est prédite (il continue ce qu'il
+  faisait) ; quand elle arrive et diffère, on revient à l'état sauvegardé (`SimState.js`)
+  et on resimule jusqu'à maintenant ;
+- l'hôte envoie son état toutes les 0,5 s : si un calcul flottant diffère d'un navigateur
+  à l'autre, l'invité se recale ; la fin du match est décidée par l'hôte ;
+- votre caméra suit votre souris tout de suite (la simulation reçoit votre regard
+  2 ticks plus tard) ; pas de gel d'image ni de ralenti en ligne ;
+- pas de pause en ligne : Échap propose d'abandonner. Ping affiché dans le HUD.
+
+Limites : certains réseaux (école, entreprise) bloquent les connexions directes ; PeerJS
+fournit un relais gratuit, sans garantie. Au-delà d'environ 150 ms de ping, les corrections
+deviennent visibles. Le jeu en ligne ne fonctionne pas dans une page intégrée sans WebRTC :
+utilisez la version GitHub Pages.
+
+`npm test` vérifie que deux simulations restent identiques, que la sauvegarde/restauration
+est exacte et qu'un rollback retombe sur le même combat.
+
 ## L'adversaire
 
 | Niveau | Boxeur | Comportement |
@@ -118,7 +158,8 @@ src/
  │                           FirstPersonArms (gants FPS), GloveFactory, Rig
  ├── world/                  Arena, Ring (cordes déformables), Lighting, Audience, Textures
  ├── fx/                     CameraRig (secousses, chute KO), ImpactEffects, ScreenEffects
- ├── ui/                     HUD, Menu, PauseMenu, OptionsPanel, RoundOverlay, ResultScreen
+ ├── ui/                     HUD, Menu, OnlinePanel, PauseMenu, OptionsPanel, RoundOverlay, ResultScreen
+ ├── net/                    en ligne : Netcode (PeerJS + rollback), OnlineWorld, SimState, Command
  ├── audio/                  AudioManager, SoundLibrary (catalogue), SoundSynth (synthèse)
  ├── styles/main.css
  └── assets/                 models/, textures/, sounds/ (vos fichiers)
@@ -176,8 +217,7 @@ Principes :
   false`) et l'affichage des statistiques en direct.
 - **Plusieurs rings** : créer d'autres `Arena` (textures, couleurs, public) et en choisir
   une au lancement.
-- **Multijoueur** : la logique est indépendante du rendu et pilotée par intentions
-  (`tryPunch`, `tryDodge`, `setGuard`, `setMoveInput`) ; il suffit de les transmettre sur le
-  réseau, avec un pas de simulation fixe et une graine commune (`Random.setSeed`).
+- **Classé en ligne** : il faudra des comptes et un serveur ; le netcode actuel (`src/net/`)
+  peut servir tel quel pour les combats.
 - **Classement / matchmaking** : `MatchStats` et le score final fournissent déjà les
   données d'un classement.

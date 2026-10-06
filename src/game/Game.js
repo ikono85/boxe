@@ -43,6 +43,9 @@ import { ResultScreen } from '../ui/ResultScreen.js';
 import { RoundOverlay } from '../ui/RoundOverlay.js';
 import { clock } from '../ui/dom.js';
 import { clamp } from '../core/MathUtils.js';
+import { OnlinePanel } from '../ui/OnlinePanel.js';
+import { OnlineWorld } from '../net/OnlineWorld.js';
+import { packCommand, pressedMask, commandFromInput, emptyCommand } from '../net/Command.js';
 
 const START_PLAYER = new Vector3(0, 0, 1.45);
 const START_OPPONENT = new Vector3(0, 0, -1.45);
@@ -70,6 +73,13 @@ export class Game {
     this.lastExhausted = false;
     this.matchActive = false;
     this.needsRender = true;
+    // En ligne : session, monde simulé, vue locale (le regard suit la souris tout de suite)
+    this.online = null;
+    this.offline = null;
+    this.view = { yaw: 0, pitch: 0 };
+    this.pendingPressed = 0;
+    this.quitOpen = false;
+    this._cmd = emptyCommand();
 
     // --- Rendu ---
     this.renderer = new WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -107,14 +117,16 @@ export class Game {
     // --- Interface ---
     this.screenFx = new ScreenEffects(uiRoot, canvas);
     this.hud = new HUD(uiRoot);
-    this.roundOverlay = new RoundOverlay(uiRoot, { onSkip: () => this.rounds.skipBreak() });
+    this.roundOverlay = new RoundOverlay(uiRoot, { onSkip: () => { if (!this.online) this.rounds.skipBreak(); } });
     const sound = (k) => this.audio.play(k);
     this.menu = new Menu(uiRoot, { settings, onPlay: () => this.startMatch(), onSound: sound });
+    this.onlinePanel = new OnlinePanel(this, settings, { onSound: sound });
+    this.menu.setOnlinePanel(this.onlinePanel);
     this.pauseMenu = new PauseMenu(uiRoot, {
       settings,
       onResume: () => this.resume(),
       onRestart: () => this.startMatch(),
-      onQuit: () => this.quitToMenu(),
+      onQuit: () => (this.online ? this.leaveOnline() : this.quitToMenu()),
       onSound: sound,
     });
     this.results = new ResultScreen(uiRoot, { onReplay: () => this.startMatch(), onMenu: () => this.quitToMenu(), onSound: sound });
@@ -145,7 +157,8 @@ export class Game {
     window.addEventListener('keydown', this._unlockAudio);
 
     this._onVisibility = () => {
-      if (document.hidden && this.state === 'fight') this.pause();
+      // En ligne, le combat continue onglet caché (le netcode avance la simulation)
+      if (document.hidden && this.state === 'fight' && !this.online) this.pause();
     };
     document.addEventListener('visibilitychange', this._onVisibility);
     this.resize();
@@ -159,6 +172,13 @@ export class Game {
 
   start() {
     this.enterMenu();
+    // Lien d'invitation : #duel=ABCDE ouvre l'écran En ligne avec le code
+    const m = /duel=([A-Za-z0-9]{5})/.exec(location.hash || '');
+    if (m) {
+      this.onlinePanel.home(m[1]);
+      this.menu.showPanel('online');
+      try { history.replaceState(null, '', location.pathname + location.search); } catch { /* sans importance */ }
+    }
     this.lastFrame = performance.now();
     this.raf = requestAnimationFrame(this.loop);
   }
@@ -192,6 +212,8 @@ export class Game {
 
   /** Lance (ou relance) un combat. Appelé depuis un clic. */
   async startMatch() {
+    if (this.online) return; // en ligne : les revanches passent par le netcode
+    if (this.onlinePanel.session) this.onlinePanel.cancel(); // un duel en attente ne doit pas surgir pendant un combat solo
     this.audio.init().then(() => {
       this.audio.startCrowd();
       this.audio.resume();
@@ -264,6 +286,16 @@ export class Game {
 
   pause() {
     if (this.state !== 'fight') return;
+    if (this.online) {
+      // Pas de pause en ligne : on propose d'abandonner, le combat continue
+      if (this.quitOpen) return;
+      this.quitOpen = true;
+      this.input.setGameActive(false);
+      this.input.exitPointerLock();
+      this.pauseMenu.show(true);
+      this.hud.setLockHint(false);
+      return;
+    }
     this.state = 'paused';
     this.input.setGameActive(false);
     this.input.exitPointerLock();
@@ -273,6 +305,14 @@ export class Game {
   }
 
   async resume() {
+    if (this.online && this.state === 'fight') {
+      this.quitOpen = false;
+      this.pauseMenu.hide();
+      this.input.setGameActive(true);
+      this.audio.resume();
+      await this._lockPointer();
+      return;
+    }
     if (this.state !== 'paused') return;
     this.pauseMenu.hide();
     this.audio.resume();
@@ -359,13 +399,17 @@ export class Game {
 
   _bindInput() {
     this.input.onLockChange((locked, error) => {
-      if (!locked && !error && this.state === 'fight' && !this.input.fallbackMode) this.pause();
+      if (!locked && !error && this.state === 'fight' && !this.input.fallbackMode) {
+        if (this.online) this.hud.setLockHint(!this.quitOpen, 'Cliquez pour reprendre la souris');
+        else this.pause();
+      }
       if (locked) this.hud.setLockHint(false);
     });
     this.input.onAnyKey((e) => {
       if (e.code === 'Escape' || e.code === 'KeyP') {
         // Échap libère aussi le pointeur (le navigateur s'en charge) : pause() est idempotent
-        if (this.state === 'fight') this.pause();
+        if (this.state === 'fight' && this.online && this.quitOpen) this.resume();
+        else if (this.state === 'fight') this.pause();
         else if (this.state === 'paused' && this.pauseMenu.optionsOpen) this.pauseMenu.back();
       }
       if (e.code === 'KeyH' && this.state === 'fight' && !e.repeat) {
@@ -374,7 +418,7 @@ export class Game {
     });
     // Clic sur le canvas pendant le combat sans verrouillage : on (re)verrouille
     this.canvas.addEventListener('click', () => {
-      if (this.state === 'fight' && !this.input.locked) this.input.requestPointerLock();
+      if (this.state === 'fight' && !this.input.locked && !this.quitOpen) this.input.requestPointerLock();
       else if (this.state === 'paused' && !this.pauseMenu.visible) this.resume();
     });
   }
@@ -440,7 +484,7 @@ export class Game {
       // Effets (pas d'éclat collé à l'objectif quand c'est le joueur qui encaisse)
       _v.copy(defender.position).sub(attacker.position).setY(0).normalize();
       if (!toPlayer) this.effects.spawn(point, _v, { crit, power: pd.shake * 3, camera: this.camera });
-      this.hitStop = Math.max(this.hitStop, pd.hitStop * (crit ? 1.8 : 1) * (e.ko ? 2 : 1));
+      if (!this.online) this.hitStop = Math.max(this.hitStop, pd.hitStop * (crit ? 1.8 : 1) * (e.ko ? 2 : 1));
       this.arena.audience.cheer(crit ? 0.35 : pd.shake * 0.4 + (e.counter ? 0.1 : 0));
       if (crit) this.arena.lighting.burst(0.6);
 
@@ -474,7 +518,7 @@ export class Game {
       this.audio.play('block', { pan: this._pan(point) });
       _v.copy(defender.position).sub(attacker.position).setY(0).normalize();
       if (defender !== this.player) this.effects.spawn(point, _v, { blocked: true, power: punch.def.shake * 2 });
-      this.hitStop = Math.max(this.hitStop, punch.def.hitStop * 0.5);
+      if (!this.online) this.hitStop = Math.max(this.hitStop, punch.def.hitStop * 0.5);
       if (defender === this.player) {
         this.cameraRig.kick({ pitch: 0.6 * punch.def.shake, push: 0.5 });
         this.cameraRig.addTrauma(0.1);
@@ -491,7 +535,7 @@ export class Game {
         if (dodged) this._msg('oppdodge', 'Esquivé', 'muted', 1.2);
       } else if (dodged && defender === this.player) {
         this._msg('pdodge', 'Esquive !', 'good', 0.8);
-        this.slowMo = { time: 0.16, scale: 0.45 };
+        if (!this.online) this.slowMo = { time: 0.16, scale: 0.45 };
       }
     });
 
@@ -531,8 +575,11 @@ export class Game {
 
     ev.on('fighter:ko', ({ fighter }) => {
       if (!inFight()) return;
-      this.rounds.registerKO(fighter);
-      this.slowMo = { time: 1.6, scale: 0.28 };
+      // En ligne, la simulation enregistre le KO elle-même (net/OnlineWorld.js) et le temps ne ralentit pas
+      if (!this.online) {
+        this.rounds.registerKO(fighter);
+        this.slowMo = { time: 1.6, scale: 0.28 };
+      }
       this.cameraRig.addTrauma(0.8);
       this.arena.audience.cheer(1);
       this.arena.audience.setBaseExcitement(0.9);
@@ -552,6 +599,11 @@ export class Game {
     });
 
     ev.on('round:intro', ({ round, total }) => {
+      if (this.online) {
+        this.roundOverlay.intro(round, total, GameConfig.match.introDuration * 0.55);
+        this.arena.audience.cheer(0.25);
+        return;
+      }
       if (round > 1) {
         for (const f of [this.player, this.opponent]) {
           f.stamina.recover(GameConfig.match.breakStaminaRecovery);
@@ -585,11 +637,18 @@ export class Game {
 
     ev.on('round:break', ({ round, total, duration }) => {
       this.roundOverlay.breakScreen({
-        round, total, duration, player: this.player, opponent: this.opponent, tips: this.ai.insights(),
+        round, total, duration, player: this.player, opponent: this.opponent,
+        tips: this.online ? ['Récupérez : votre endurance remonte pendant la pause.'] : this.ai.insights(),
       });
+      if (this.online) {
+        const skip = this.roundOverlay.el.querySelector('[data-id="skip"]');
+        if (skip) skip.remove();
+      }
     });
 
-    ev.on('match:end', (result) => this._showResults(result));
+    ev.on('match:end', (result) => {
+      if (!this.online) this._showResults(result); // en ligne : fin décidée par l'hôte (onlineOver)
+    });
   }
 
   _showResults(r) {
@@ -624,6 +683,233 @@ export class Game {
     this.results.show(r, {
       player: p, opponent: this.opponent, score, newRecord, best, difficultyLabel: this.difficulty.label,
     });
+  }
+
+  /* ================================================================
+   * En ligne (appelé par net/Netcode.js)
+   * ================================================================ */
+
+  /** Début d'un combat en ligne (et de chaque revanche). Retourne la simulation. */
+  onlineStart(session, st) {
+    if (!this.offline) {
+      this.offline = { player: this.player, opponent: this.opponent, rounds: this.rounds, combat: this.combat };
+    }
+    const me = session.me;
+    const profiles = [0, 1].map((i) => ({
+      ...BOXERS.player,
+      id: `net${i}`,
+      name: st.names[i],
+      nickname: i === me ? 'Vous' : 'En ligne',
+      corner: i === 0 ? 'red' : 'blue',
+      gloves: i === 0 ? 'crimson' : 'cobalt',
+      look: { ...BOXERS.player.look, model: st.models[i] },
+    }));
+    const world = new OnlineWorld({ profiles, rounds: st.rounds, roundDuration: st.dur });
+    const p = world.fighters[me];
+    const o = world.fighters[1 - me];
+    const s = this.settings.values;
+    p.sensitivity = s.mouseSensitivity;
+    p.invertY = s.invertY;
+    p.aimAssist = s.aimAssist;
+    this.online = { session, world, me, hudAt: 0 };
+    this.player = p;
+    this.opponent = o;
+    this.rounds = world.rounds;
+    this.combat = world.combat;
+    this.opponentModel.dispose();
+    this.opponentModel = new RiggedBoxerModel(o.profile);
+    this.scene.add(this.opponentModel.root);
+    this.applyQualityToModel();
+    world.start(st.seed);
+    this.view.yaw = p.yaw;
+    this.view.pitch = 0;
+    this.pendingPressed = 0;
+    this.quitOpen = false;
+
+    this.audio.init().then(() => {
+      this.audio.startCrowd();
+      this.audio.resume();
+    });
+    this.menu.hide();
+    this.pauseMenu.hide();
+    this.results.hide();
+    this.roundOverlay.hide();
+    this.screenFx.reset();
+    this.screenFx.setBars(false);
+    this.screenFx.setFade(0);
+    this.cameraRig.resetEffects();
+    this.hitStop = 0;
+    this.slowMo.time = 0;
+    const prev = this.state;
+    this.state = 'fight';
+    this.matchActive = true;
+    this.cameraRig.setMode('fight', { transition: prev === 'menu' || prev === 'results' });
+    this.arms.setVisible(true);
+    this.playerShadow.visible = true;
+    this.hud.setFighters(p, o, { opponentSub: 'En ligne' });
+    this.hud.show();
+    this.arena.audience.setBaseExcitement(0.3);
+    this.audio.setCrowdLevel(0.8);
+    this.input.setGameActive(true);
+    // Le combat démarre souvent sans clic (message réseau) : le navigateur peut refuser
+    // de verrouiller la souris tout de suite → invite « Cliquez », le combat ne s'arrête pas.
+    this.input.requestPointerLock().then((ok) => {
+      if (this.online && !ok && !this.input.fallbackMode) this.hud.setLockHint(true, 'Cliquez pour prendre la souris');
+    });
+    return world;
+  }
+
+  /** Événements de simulation à montrer (sons, effets, HUD) : une seule fois chacun. */
+  onlineEvents(list) {
+    for (const e of list) this.events.emit(e.type, e.payload);
+  }
+
+  /** Ma commande pour le prochain tick (format réseau). */
+  onlineLocalCommand() {
+    const v = this.view;
+    let c;
+    if (window.__netBot) {
+      // tests : un bot joue à la place du clavier (voir tests de bout en bout)
+      c = Object.assign(this._cmd, window.__netBot(this, v));
+    } else if (this.quitOpen || !this.input.gameActive) {
+      c = this._cmd;
+      Object.assign(c, { mx: 0, mz: 0, guard: false, dodgeHeld: false, dirPressed: false, duck: false, dodge: false, punches: 0 });
+      c.yaw = v.yaw;
+      c.pitch = v.pitch;
+    } else c = commandFromInput(this.input, v.yaw, v.pitch, this.pendingPressed, this._cmd);
+    this.pendingPressed = 0;
+    return packCommand(c);
+  }
+
+  _updateOnline(realDt) {
+    const O = this.online;
+    const p = this.player;
+    // Regard : tout de suite, sans attendre la simulation
+    if (this.input.gameActive && !this.quitOpen) {
+      p.updateView(this.input, realDt, this.view);
+      this.pendingPressed |= pressedMask(this.input);
+    } else this.input.consumeLook({ x: 0, y: 0 });
+    if (p.lookLocked || this.rounds.phase === 'intro') {
+      this.view.yaw = p.yaw;
+      this.view.pitch = p.pitch;
+    }
+    O.session.frame(realDt);
+    if (this.online !== O || this.state !== 'fight') return; // fin du match / départ pendant la frame
+
+    // Affichage avec MON regard (la simulation a celui d'il y a 2 ticks), puis on remet l'état simulé
+    const simYaw = p.yaw;
+    const simPitch = p.pitch;
+    if (!p.ko) {
+      p.yaw = this.view.yaw;
+      p.pitch = this.view.pitch;
+      p.updateFrame();
+    }
+    this._presentFight(realDt, realDt);
+    p.yaw = simYaw;
+    p.pitch = simPitch;
+    p.updateFrame();
+
+    // Ping dans le HUD
+    O.hudAt -= realDt;
+    if (O.hudAt <= 0) {
+      O.hudAt = 0.5;
+      const st = O.session.netStatus;
+      this.hud.$.osub.textContent = `En ligne · ${st.text}`;
+      this.hud.$.osub.classList.toggle('net-bad', st.bad);
+    }
+  }
+
+  /** Fin du match (décidée par l'hôte) : écran de résultat avec Revanche / Quitter. */
+  onlineOver(session, sum) {
+    const O = this.online;
+    if (!O || O.session !== session) return;
+    const W = O.world;
+    const me = O.me;
+    const winner = sum.w >= 0 ? W.fighters[sum.w] : null;
+    const r = {
+      method: sum.method,
+      kind: sum.kind || (winner ? 'Décision' : 'Match nul'),
+      winner,
+      loser: winner ? W.fighters[1 - sum.w] : null,
+      round: sum.round,
+      time: sum.time,
+      // cartes des juges : colonne de gauche = moi
+      scorecards: sum.scorecards.map((rounds) => rounds.map(([a, b]) => (me === 0 ? [a, b] : [b, a]))),
+    };
+    this.state = 'results';
+    this.matchActive = false;
+    this.quitOpen = false;
+    this.input.setGameActive(false);
+    this.input.exitPointerLock();
+    this.hud.hide();
+    this.pauseMenu.hide();
+    this.roundOverlay.hide();
+    this.screenFx.setBars(false);
+    this.screenFx.setFade(0);
+    this.cameraRig.zoomTarget = 0;
+    this.cameraRig.setMode('results', { transition: false });
+    this.arms.setVisible(false);
+    this.playerShadow.visible = false;
+    if (r.method !== 'KO') {
+      this.audio.play('bell', { minGap: 0 });
+      this.audio.play('crowd_cheer', { volume: 0.8 });
+    }
+    this.results.show(r, {
+      player: this.player,
+      opponent: this.opponent,
+      online: {
+        foe: session.foeName,
+        mine: false, theirs: false, gone: false,
+        onRematch: () => session.askRematch(),
+        onQuit: () => this.leaveOnline(),
+      },
+    });
+  }
+
+  onlineResultChanged(session) {
+    if (!this.online || this.online.session !== session || this.state !== 'results') return;
+    this.results.updateOnline({
+      foe: session.foeName,
+      mine: session.rematch[session.me],
+      theirs: session.rematch[1 - session.me],
+      gone: session.gone,
+    });
+  }
+
+  /** L'adversaire est parti (forfait) ou la connexion est coupée. */
+  onlineLeft({ bye, inMatch, foe, desync }) {
+    let notice;
+    if (bye && inMatch) notice = { good: true, title: 'Victoire par forfait', text: `${foe} a quitté le combat.` };
+    else if (desync) notice = { title: 'Combat interrompu', text: `Les deux simulations n’ont pas pu être resynchronisées avec ${foe}. Le combat est annulé.` };
+    else if (inMatch) notice = { title: 'Connexion perdue', text: `Le lien avec ${foe} s’est coupé (réseau instable, onglet fermé ou ordinateur en veille). Le combat est annulé.` };
+    else notice = { title: 'Connexion perdue', text: `Le lien avec ${foe} s’est coupé avant le début du combat.` };
+    this._exitOnline(notice);
+  }
+
+  /** Quitter le jeu en ligne (abandon pendant un combat = victoire par forfait pour l'adversaire). */
+  leaveOnline() {
+    if (this.online) this.online.session.leave();
+    this._exitOnline(null);
+  }
+
+  _exitOnline(notice) {
+    this.online = null;
+    this.quitOpen = false;
+    if (this.offline) {
+      this.player = this.offline.player;
+      this.opponent = this.offline.opponent;
+      this.rounds = this.offline.rounds;
+      this.combat = this.offline.combat;
+      this.offline = null;
+      this.opponentModel.dispose();
+      this.opponentModel = new RiggedBoxerModel(this.opponent.profile);
+      this.scene.add(this.opponentModel.root);
+      this.applyQualityToModel();
+    }
+    this.enterMenu();
+    if (notice) this.onlinePanel.setNotice(notice);
+    this.onlinePanel.home();
+    this.menu.showPanel('online');
   }
 
   /* ================================================================
@@ -697,6 +983,7 @@ export class Game {
     }
 
     if (this.state === 'menu') this._updateMenu(realDt);
+    else if (this.state === 'fight' && this.online) this._updateOnline(realDt);
     else if (this.state === 'fight') this._updateFight(dt, realDt);
     else if (this.state === 'results') this._updateResults(realDt);
   }
@@ -745,7 +1032,14 @@ export class Game {
       if (active) this.combat.update();
       r.update(dt);
     }
+    this._presentFight(dt, realDt);
+  }
 
+  /** Affichage du combat (modèles, gants, caméra, salle, HUD) : commun au solo et au jeu en ligne. */
+  _presentFight(dt, realDt) {
+    const p = this.player;
+    const o = this.opponent;
+    const r = this.rounds;
     const victory = r.phase === 'ko' || r.phase === 'over';
     this.opponentModel.update(dt, o, { victory: victory && p.ko && p.koTime > 1.2, camera: p.eye });
     this.arms.update(dt, realDt, p, { victory: victory && o.ko && o.koTime > 1 });
@@ -772,8 +1066,8 @@ export class Game {
       round: r.round,
       total: r.totalRounds,
       time: clock(r.phase === 'intro' ? r.roundDuration : r.timeLeft),
-      red: 'VOUS',
-      blue: o.name.split(' ').pop().toUpperCase(),
+      red: this.online ? (this.online.me === 0 ? p.name : o.name).toUpperCase().slice(0, 12) : 'VOUS',
+      blue: this.online ? (this.online.me === 0 ? o.name : p.name).toUpperCase().slice(0, 12) : o.name.split(' ').pop().toUpperCase(),
     });
 
     this._updateBodySounds(realDt);
