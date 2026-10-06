@@ -5,7 +5,7 @@ export default defineConfig({
   base: './',
   build: {
     target: 'es2020',
-    chunkSizeWarningLimit: 3000, // inclut le modèle du ring (~1,2 Mo)
+    chunkSizeWarningLimit: 6500, // inclut les modèles (ring, personnages)
     // Le modèle du ring est intégré au JavaScript : le jeu reste un seul fichier
     // (version autonome) et ne fait aucune requête réseau.
     assetsInlineLimit: (file) => (file.endsWith('.glb') ? true : undefined),

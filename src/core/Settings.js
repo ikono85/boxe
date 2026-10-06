@@ -22,7 +22,7 @@ export const DEFAULT_SETTINGS = {
   rounds: 3,
   roundDuration: 60,
   netName: '', // en ligne : nom affiché à l'adversaire
-  netModel: 'beach', // en ligne : personnage
+  netModel: 'xbot', // en ligne : personnage
 };
 
 function safeRead(key) {

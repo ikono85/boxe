@@ -120,14 +120,20 @@ est exacte et qu'un rollback retombe sur le même combat.
 
 | Niveau | Boxeur | Comportement |
 | --- | --- | --- |
-| Débutant | Léo « Le Rookie » Martin (personnage `casual`) | Attaque peu, garde souvent, coups très lisibles, se déplace en ligne droite |
-| Équilibré | Marco « La Tempête » Reyes (personnage `beach`) | Attaque régulièrement, esquive, bloque, contre parfois, tourne autour de vous |
-| Expert | Viktor « Le Marteau » Kral (personnage `worker`) | Analyse vos habitudes (coup favori, enchaînements, esquives préférées), contre, feinte, varie ses coups, gère son souffle et passe à l'attaque dès que vous êtes touché |
+| Débutant | Léo « Le Rookie » Martin (X Bot) | Attaque peu, garde souvent, coups très lisibles, se déplace en ligne droite |
+| Équilibré | Marco « La Tempête » Reyes (X Bot) | Attaque régulièrement, esquive, bloque, contre parfois, tourne autour de vous |
+| Expert | Viktor « Le Marteau » Kral (X Bot) | Analyse vos habitudes (coup favori, enchaînements, esquives préférées), contre, feinte, varie ses coups, gère son souffle et passe à l'attaque dès que vous êtes touché |
 
 L'IA (`src/game/AI.js`) ne triche pas : elle passe par les mêmes règles que le joueur
 (endurance, timings, détection). Elle gère la distance, tourne pour ne pas rester dans les
 cordes, entre, enchaîne et ressort, récupère quand elle est fatiguée, réagit aux coups
 après un temps de réaction propre à chaque niveau.
+
+Le personnage (X Bot de Mixamo) est animé par de vraies captures de mouvement : garde,
+pas, jab, direct, crochets, uppercuts, parades, coups reçus à la tête et au corps,
+étourdissement et KO. Les clips sont calés sur les coups du jeu (l'impact de l'animation
+tombe à l'impact réel), puis corrigés à chaque image : les gants suivent exactement la
+trajectoire qui sert à la détection et la tête suit la tête « logique » (esquives).
 
 ## Architecture
 
@@ -180,6 +186,9 @@ Principes :
 
 - **Un nouveau boxeur** : une entrée dans `BOXERS` (`config/Boxers.js`), puis
   `opponent: 'sonId'` dans un profil de `Difficulty.js`.
+- **Un personnage Mixamo** : exportez le personnage et ses clips en .glb (voir
+  `src/assets/models/README.md`), puis `node scripts/optimize-character.mjs <entrée> <sortie>`,
+  une ligne dans `MIXAMO_MODELS` (`characters/MixamoBoxerModel.js`) et `look.model`.
 - **Un nouveau personnage 3D** : un .glb au squelette Quaternius (`Hips`, `Chest`,
   `UpperArm.L`…) dans `src/assets/models/characters/`, une ligne dans `CHARACTER_MODELS`
   (`characters/RiggedBoxerModel.js`), puis `look.model` sur le boxeur.
@@ -197,7 +206,10 @@ Principes :
   (https://sketchfab.com/3d-models/professional-boxing-ring-a2b5a268fc5149e78ccf4bbe2a64b399),
   licence CC BY 4.0. Allégé (447 000 → 25 000 triangles) et adapté par
   `scripts/optimize-ring.mjs` ; détails dans `src/assets/models/README.md`.
-- Adversaires : personnages « Ultimate Modular Men » de Quaternius (https://quaternius.com),
+- Adversaire : personnage X Bot et animations de boxe de Mixamo (https://www.mixamo.com),
+  utilisés dans le jeu selon les conditions de Mixamo (les fichiers d'origine ne sont pas
+  redistribués séparément).
+- Personnages en ligne : « Ultimate Modular Men » de Quaternius (https://quaternius.com),
   domaine public (CC0) ; bras allongés au chargement pour l'allonge des coups.
 
 ## Performances

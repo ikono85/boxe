@@ -33,7 +33,7 @@ const NET_TIMEOUT = 8000; // ms sans aucun message : connexion perdue
 export const PEER_PREFIX = 'boxing-arena-v1-';
 export const QUICK_SLOTS = 6; // partie rapide : jusqu'à 6 joueurs en attente en même temps
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // ni 0/O ni 1/I/L
-export const MODELS = ['beach', 'casual', 'worker'];
+export const MODELS = ['xbot', 'beach', 'casual', 'worker'];
 const FORMATS = { rounds: [1, 3, 5], dur: [60, 90, 120] };
 
 export const cleanName = (v) => String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, 14);

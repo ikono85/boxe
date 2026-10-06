@@ -30,7 +30,7 @@ import { CombatSystem } from './CombatSystem.js';
 import { RoundSystem } from './RoundSystem.js';
 import { AI } from './AI.js';
 import { Arena } from '../world/Arena.js';
-import { RiggedBoxerModel } from '../characters/RiggedBoxerModel.js';
+import { createBoxerModel } from '../characters/createBoxerModel.js';
 import { FirstPersonArms } from '../characters/FirstPersonArms.js';
 import { CameraRig } from '../fx/CameraRig.js';
 import { ImpactEffects } from '../fx/ImpactEffects.js';
@@ -103,7 +103,7 @@ export class Game {
     this.combat.setFighters(this.player, this.opponent);
     this.rounds = new RoundSystem(this.events);
     this.ai = new AI(this.opponent, this.difficulty, this.events);
-    this.opponentModel = new RiggedBoxerModel(this.opponent.profile);
+    this.opponentModel = createBoxerModel(this.opponent.profile);
     this.scene.add(this.opponentModel.root);
     this.arms = new FirstPersonArms(this.camera, { gloveSkin: BOXERS.player.gloves, skinColor: BOXERS.player.look.skin });
     this._buildPlayerShadow();
@@ -336,7 +336,7 @@ export class Game {
     if (changed) {
       this.opponent.setProfile(BOXERS[diff.opponent]);
       this.opponentModel.dispose();
-      this.opponentModel = new RiggedBoxerModel(this.opponent.profile);
+      this.opponentModel = createBoxerModel(this.opponent.profile);
       this.scene.add(this.opponentModel.root);
       this.applyQualityToModel();
     }
@@ -717,7 +717,7 @@ export class Game {
     this.rounds = world.rounds;
     this.combat = world.combat;
     this.opponentModel.dispose();
-    this.opponentModel = new RiggedBoxerModel(o.profile);
+    this.opponentModel = createBoxerModel(o.profile);
     this.scene.add(this.opponentModel.root);
     this.applyQualityToModel();
     world.start(st.seed);
@@ -902,7 +902,7 @@ export class Game {
       this.combat = this.offline.combat;
       this.offline = null;
       this.opponentModel.dispose();
-      this.opponentModel = new RiggedBoxerModel(this.opponent.profile);
+      this.opponentModel = createBoxerModel(this.opponent.profile);
       this.scene.add(this.opponentModel.root);
       this.applyQualityToModel();
     }

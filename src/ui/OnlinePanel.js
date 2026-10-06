@@ -9,7 +9,7 @@
 import { el, esc } from './dom.js';
 import { NetSession, MODELS, QUICK_SLOTS, cleanCode, cleanName } from '../net/Netcode.js';
 
-const MODEL_LABELS = { beach: 'Short rouge', casual: 'T-shirt', worker: 'Gilet orange' };
+const MODEL_LABELS = { xbot: 'X Bot', beach: 'Short rouge', casual: 'T-shirt', worker: 'Gilet orange' };
 const QUICK_FORMAT = { rounds: 3, dur: 60 };
 
 const NET_ERR = {

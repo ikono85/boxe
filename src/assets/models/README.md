@@ -24,3 +24,15 @@ matières en tête du script pour un autre modèle).
 (https://quaternius.com), licence CC0 (domaine public, voir `LICENSE-Quaternius.txt`).
 `characters/RiggedBoxerModel.js` les anime à partir de la pose calculée par `BoxerModel`
 (IK bras et jambes, colonne, tête) et allonge leurs bras au chargement.
+
+`characters/xbot.glb` : X Bot et 18 clips de boxe de Mixamo (https://www.mixamo.com), utilisés
+selon les conditions de Mixamo (intégrés au jeu, pas redistribués séparément).
+`characters/MixamoBoxerModel.js` joue les clips (AnimationMixer) puis corrige la pose : gants
+sur la trajectoire logique des coups (IK), tête sur la tête logique, pieds au sol.
+
+Préparation : les .fbx Mixamo (personnage « T-pose », animations « Without Skin », 30 i/s)
+sont chargés avec `FBXLoader`, les clips renommés (`idle`, `step`, `jab`, `cross`, `hookR`,
+`upperR`, `blockC`, `blockL`, `blockR`, `headHit1-3`, `bodyHit1-2`, `upperHitLight`,
+`upperHitHeavy`, `dizzy`, `ko`) puis exportés avec `GLTFExporter`. Le crochet et l'uppercut
+gauches sont des miroirs calculés au chargement. Allègement :
+`node scripts/optimize-character.mjs xbot-raw.glb src/assets/models/characters/xbot.glb`.
