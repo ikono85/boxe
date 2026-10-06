@@ -1,0 +1,26 @@
+{
+  "name": "boxing-arena",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Jeu de boxe FPS arcade jouable dans le navigateur (Three.js + Vite)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "build:standalone": "vite build && node scripts/build-standalone.mjs",
+    "simulate": "node scripts/simulate.mjs",
+    "optimize:ring": "node scripts/optimize-ring.mjs"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/extensions": "^4.5.1",
+    "@gltf-transform/functions": "^4.5.1",
+    "meshoptimizer": "^1.3.0",
+    "sharp": "^0.35.5",
+    "vite": "^8.3.3"
+  }
+}
