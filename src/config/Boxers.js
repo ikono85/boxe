@@ -7,8 +7,8 @@
  *
  * fightStyle : façon de boxer de l'IA (clé de FIGHT_STYLES dans config/Styles.js).
  *
- * look.model : personnage 3D riggé (clé de CHARACTER_MODELS dans
- * characters/RiggedBoxerModel.js). Sans cette clé, le boxeur est construit en
+ * look.model : personnage 3D animé par capture (clé de MIXAMO_MODELS dans
+ * characters/MixamoBoxerModel.js). Sans cette clé, le boxeur est construit en
  * primitives (BoxerModel) à partir des autres champs de `look`.
  *
  * stats :

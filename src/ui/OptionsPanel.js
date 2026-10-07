@@ -43,7 +43,7 @@ export class OptionsPanel {
         <label class="toggle" for="${id}-help">Afficher l'aide des commandes <input id="${id}-help" data-id="help" type="checkbox"></label>
         <label class="toggle" for="${id}-fps">Afficher les FPS <input id="${id}-fps" data-id="fps" type="checkbox"></label>
         <p class="hint">Qualité basse : ring simplifié, sans ombres, moins de public et de particules. À choisir si le jeu descend sous 60 FPS.</p>
-        <p class="hint credits">Ring 3D : « <a href="https://sketchfab.com/3d-models/professional-boxing-ring-a2b5a268fc5149e78ccf4bbe2a64b399" target="_blank" rel="noopener">Professional Boxing Ring</a> » par <a href="https://sketchfab.com/al1905" target="_blank" rel="noopener">A1905</a>, licence <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> (allégé et adapté pour le jeu). Boxeurs : personnages « Ultimate Modular Men » de <a href="https://quaternius.com" target="_blank" rel="noopener">Quaternius</a> (CC0).</p>
+        <p class="hint credits">Ring 3D : « <a href="https://sketchfab.com/3d-models/professional-boxing-ring-a2b5a268fc5149e78ccf4bbe2a64b399" target="_blank" rel="noopener">Professional Boxing Ring</a> » par <a href="https://sketchfab.com/al1905" target="_blank" rel="noopener">A1905</a>, licence <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> (allégé et adapté pour le jeu). Boxeurs : personnage et animations <a href="https://www.mixamo.com" target="_blank" rel="noopener">Mixamo</a>.</p>
         ${onBack ? '<button class="btn small" type="button" data-id="back">Retour</button>' : ''}
       </div>`);
     this.$ = {};
