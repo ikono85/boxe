@@ -7,9 +7,8 @@
  */
 
 import { el, esc } from './dom.js';
-import { NetSession, MODELS, QUICK_SLOTS, cleanCode, cleanName } from '../net/Netcode.js';
+import { NetSession, QUICK_SLOTS, cleanCode, cleanName } from '../net/Netcode.js';
 
-const MODEL_LABELS = { xbot: 'X Bot', beach: 'Short rouge', casual: 'T-shirt', worker: 'Gilet orange' };
 const QUICK_FORMAT = { rounds: 3, dur: 60 };
 
 const NET_ERR = {
@@ -65,7 +64,6 @@ export class OnlinePanel {
   home(prefillCode = '') {
     this._cancelSession();
     const s = this.settings;
-    const model = MODELS.includes(s.get('netSkin')) ? s.get('netSkin') : MODELS[0];
     const notice = this.notice;
     this.notice = null;
     const blocked = !webrtcAvailable();
@@ -79,12 +77,6 @@ export class OnlinePanel {
       <div class="field">
         <label for="net-name">Votre nom de boxeur</label>
         <input id="net-name" class="net-input" data-id="name" type="text" maxlength="14" autocomplete="off" spellcheck="false" placeholder="Boxeur">
-      </div>
-      <div class="field">
-        <div class="label" id="net-model-label">Votre boxeur</div>
-        <div class="segmented" role="radiogroup" aria-labelledby="net-model-label" data-id="model">
-          ${MODELS.map((m) => `<button type="button" role="radio" data-v="${m}" class="${m === model ? 'on' : ''}" aria-checked="${m === model}">${MODEL_LABELS[m]}</button>`).join('')}
-        </div>
       </div>
       <div class="net-actions">
         <button class="btn primary" type="button" data-id="quick" ${blocked ? 'disabled' : ''}>Partie rapide
@@ -103,16 +95,6 @@ export class OnlinePanel {
       <p class="hint">Format d’un duel privé : celui de l’hôte (menu Difficulté). Pas de pause en ligne : Échap propose d’abandonner.</p>`);
     this.$.name.value = s.get('netName') || '';
     this.$.name.addEventListener('change', () => this._keepName());
-    this.$.model.addEventListener('click', (e) => {
-      const b = e.target.closest('button');
-      if (!b) return;
-      this.onSound('ui_click');
-      s.set('netSkin', b.dataset.v);
-      this.$.model.querySelectorAll('button').forEach((x) => {
-        x.classList.toggle('on', x === b);
-        x.setAttribute('aria-checked', String(x === b));
-      });
-    });
     const code = this.$.code;
     code.addEventListener('input', () => {
       code.value = cleanCode(code.value);
