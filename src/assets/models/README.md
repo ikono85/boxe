@@ -1,10 +1,14 @@
 # Modèles 3D
 
-Les boxeurs sont construits en primitives (`src/characters/BoxerModel.js`). Pour un modèle
-riggé (glTF/GLB), chargez-le avec `GLTFLoader` (`three/addons/loaders/GLTFLoader.js`) et
-reproduisez `BoxerModel.update(dt, fighter)` : position et orientation de la racine,
-inclinaisons depuis `fighter.headOffset` / `bodyOffset`, gants placés sur
-`fighter.punches.getGloveWorld(main)`, réactions depuis `fighter.hitReact`.
+Les boxeurs sont affichés avec le personnage Mixamo (`src/characters/MixamoBoxerModel.js`),
+et retombent sur les primitives (`src/characters/BoxerModel.js`) tant que le fichier n'est pas
+chargé, s'il ne se charge pas, ou si le profil n'a pas de `look.model`.
+
+Pour brancher un autre personnage, chargez-le avec `GLTFLoader`
+(`three/addons/loaders/GLTFLoader.js`) et reproduisez `BoxerModel.update(dt, fighter)` :
+position et orientation de la racine, inclinaisons depuis `fighter.headOffset` /
+`bodyOffset`, gants placés sur `fighter.punches.getGloveWorld(main)`, réactions depuis
+`fighter.hitReact`. `characters/Rig.js` fournit l'IK à deux os.
 
 ## Ring
 
@@ -19,11 +23,6 @@ Pour le régénérer ou préparer un autre ring : téléchargez le modèle au fo
 matières en tête du script pour un autre modèle).
 
 ## Personnages
-
-`characters/casual.glb`, `beach.glb`, `worker.glb` : « Ultimate Modular Men » par Quaternius
-(https://quaternius.com), licence CC0 (domaine public, voir `LICENSE-Quaternius.txt`).
-`characters/RiggedBoxerModel.js` les anime à partir de la pose calculée par `BoxerModel`
-(IK bras et jambes, colonne, tête) et allonge leurs bras au chargement.
 
 `characters/xbot.glb` : X Bot et 32 clips de boxe de Mixamo (https://www.mixamo.com), utilisés
 selon les conditions de Mixamo (intégrés au jeu, pas redistribués séparément).

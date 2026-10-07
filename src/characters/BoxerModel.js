@@ -54,9 +54,6 @@ const _knee = new Vector3();
 const _foot = new Vector3();
 const _local = new Vector3();
 
-export const BOXER_PELVIS_Y = PELVIS_Y;
-export const BOXER_ANKLE_Y = ANKLE_Y;
-
 export class BoxerModel {
   constructor(profile) {
     this.root = new Group();
@@ -181,7 +178,7 @@ export class BoxerModel {
         hand, side: hand === 'left' ? -1 : 1, upper, fore, glove,
         shoulderLocal: new Vector3((hand === 'left' ? -0.205 : 0.205) * build, 0.43, 0),
         pos: new Vector3(), quat: new Quaternion(),
-        wrist: new Vector3(), pole: new Vector3(), // cibles IK (repère « body »), lues par RiggedBoxerModel
+        wrist: new Vector3(), pole: new Vector3(), // cibles IK du bras, dans le repère « body »
       };
     }
 
