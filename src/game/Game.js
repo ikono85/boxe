@@ -8,7 +8,7 @@
  * Boucle (requestAnimationFrame) :
  *   1. temps réel → temps de jeu (gel d'image à l'impact, ralenti du KO) ;
  *   2. entrées du joueur, IA, logique des boxeurs, combat, rounds ;
- *   3. animations (gants FPS, modèle adverse), caméra, salle, effets, HUD ;
+ *   3. animations (poings FPS, modèle adverse), caméra, salle, effets, HUD ;
  *   4. rendu.
  *
  * Les systèmes communiquent par le bus d'événements : ce fichier abonne le
@@ -113,7 +113,7 @@ export class Game {
     this.referee = new Referee();
     this.scene.add(this.referee.root);
     this.referee.ready.then(() => this.applyQualityToModel());
-    this.arms = new FirstPersonArms(this.camera, { gloveSkin: BOXERS.player.gloves, skinColor: BOXERS.player.look.skin });
+    this.arms = new FirstPersonArms(this.camera, { skinColor: BOXERS.player.look.skin });
     this._buildPlayerShadow();
 
     // --- Caméra, son, entrées ---
@@ -813,7 +813,6 @@ export class Game {
       name: st.names[i],
       nickname: i === me ? 'Vous' : 'En ligne',
       corner: i === 0 ? 'red' : 'blue',
-      gloves: i === 0 ? 'crimson' : 'cobalt',
       look: { ...BOXERS.player.look, model: st.models[i] },
     }));
     const world = new OnlineWorld({ profiles, rounds: st.rounds, roundDuration: st.dur });
@@ -1150,7 +1149,7 @@ export class Game {
     this._presentFight(dt, realDt);
   }
 
-  /** Affichage du combat (modèles, gants, caméra, salle, HUD) : commun au solo et au jeu en ligne. */
+  /** Affichage du combat (modèles, poings, caméra, salle, HUD) : commun au solo et au jeu en ligne. */
   _presentFight(dt, realDt) {
     const p = this.player;
     const o = this.opponent;

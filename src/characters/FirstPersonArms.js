@@ -3,19 +3,19 @@
  * ------------------------------------------------------------------
  * Gants et avant-bras du joueur en vue subjective (attachés à la caméra).
  *
- * La position de chaque gant vient directement de la logique de combat
+ * La position de chaque poing vient directement de la logique de combat
  * (PunchSystem.getGloveWorld) convertie dans le repère caméra : ce que le
  * joueur voit est exactement ce qui est testé pour les impacts.
  * Par-dessus, des effets purement visuels quand on ne frappe pas :
  * respiration, rebond sur les appuis, inertie lors des mouvements de souris,
- * secousse des gants quand on encaisse ou qu'on bloque.
+ * secousse des poings quand on encaisse ou qu'on bloque.
  */
 
 import {
   Group, Mesh, CylinderGeometry, MeshStandardMaterial, Vector3, Quaternion, Color,
 } from 'three';
 import { GameConfig } from '../config/GameConfig.js';
-import { createGlove, disposeGlove, GLOVE_WRIST_OFFSET } from './GloveFactory.js';
+import { createFist, disposeFist, FIST_WRIST_OFFSET } from './FistFactory.js';
 import { solveTwoBone, placeBone, gloveQuaternion } from './Rig.js';
 import { clamp, wrapAngle, Ease, Spring } from '../core/MathUtils.js';
 
@@ -35,7 +35,7 @@ const _tan = new Vector3();
 const _tmp = new Vector3();
 
 export class FirstPersonArms {
-  constructor(camera, { gloveSkin = 'crimson', skinColor = '#c98d66' } = {}) {
+  constructor(camera, { skinColor = '#c98d66' } = {}) {
     this.camera = camera;
     this.group = new Group();
     this.group.name = 'viewmodel';
@@ -44,10 +44,10 @@ export class FirstPersonArms {
     this.wrapMat = new MeshStandardMaterial({ color: '#f1ede4', roughness: 0.8 });
     this.foreGeo = new CylinderGeometry(0.047, 0.058, 1, 14);
     this.upperGeo = new CylinderGeometry(0.06, 0.068, 1, 14);
-    this.wrapGeo = new CylinderGeometry(0.052, 0.052, 0.05, 14);
+    this.wrapGeo = new CylinderGeometry(0.05, 0.047, 0.085, 14);
     this.hands = {
-      left: this._buildArm('left', gloveSkin),
-      right: this._buildArm('right', gloveSkin),
+      left: this._buildArm('left', skinColor),
+      right: this._buildArm('right', skinColor),
     };
     this.time = 0;
     this.prevYaw = null;
@@ -61,9 +61,9 @@ export class FirstPersonArms {
     this.celebrateTarget = 0;
   }
 
-  _buildArm(hand, gloveSkin) {
+  _buildArm(hand, skinColor) {
     const side = hand === 'left' ? -1 : 1;
-    const glove = createGlove(hand, gloveSkin, 1);
+    const fist = createFist(hand, skinColor, 1);
     const fore = new Mesh(this.foreGeo, this.skinMat);
     const upper = new Mesh(this.upperGeo, this.skinMat);
     const wrap = new Mesh(this.wrapGeo, this.wrapMat);
@@ -71,16 +71,16 @@ export class FirstPersonArms {
       m.castShadow = false;
       m.frustumCulled = false;
     }
-    glove.traverse((o) => {
+    fist.traverse((o) => {
       if (o.isMesh) {
         o.castShadow = false;
         o.frustumCulled = false;
       }
     });
-    this.group.add(glove, fore, upper, wrap);
+    this.group.add(fist, fore, upper, wrap);
     const s = hand === 'left' ? VM.shoulderL : VM.shoulderR;
     return {
-      hand, side, glove, fore, upper, wrap,
+      hand, side, fist, fore, upper, wrap,
       shoulder: new Vector3(s[0], s[1], s[2]),
       elbow: new Vector3(),
       pos: new Vector3(),
@@ -88,20 +88,6 @@ export class FirstPersonArms {
     };
   }
 
-  setGloveSkin(skin) {
-    for (const h of Object.values(this.hands)) {
-      this.group.remove(h.glove);
-      disposeGlove(h.glove);
-      h.glove = createGlove(h.hand, skin, 1);
-      h.glove.traverse((o) => {
-        if (o.isMesh) {
-          o.castShadow = false;
-          o.frustumCulled = false;
-        }
-      });
-      this.group.add(h.glove);
-    }
-  }
 
   setVisible(v) {
     this.group.visible = v;
@@ -127,7 +113,7 @@ export class FirstPersonArms {
     this.sway.x += (clamp(dYaw * 0.012, -0.05, 0.05) - this.sway.x) * k;
     this.sway.y += (clamp(-dPitch * 0.01, -0.04, 0.04) - this.sway.y) * k;
 
-    // Secousse des gants quand on encaisse / qu'on bloque
+    // Secousse des poings quand on encaisse / qu'on bloque
     const hr = player.hitReact;
     if (hr.serial !== this.lastHitSerial) {
       this.lastHitSerial = hr.serial;
@@ -166,7 +152,7 @@ export class FirstPersonArms {
       h.pos.y += this.joltY.value * 0.05;
       h.pos.z += this.joltZ.value * 0.05;
 
-      // Victoire : gants levés
+      // Victoire : poings levés
       if (this.celebrate > 0.001) {
         _tmp.set(h.side * 0.2, 0.16 + Math.sin(t * 6 + h.side) * 0.03, -0.42);
         h.pos.lerp(_tmp, Ease.inOutCubic(this.celebrate));
@@ -199,11 +185,11 @@ export class FirstPersonArms {
         _qa.slerp(_qb, w);
       }
       h.quat.copy(_qa);
-      h.glove.position.copy(h.pos);
-      h.glove.quaternion.copy(h.quat);
+      h.fist.position.copy(h.pos);
+      h.fist.quaternion.copy(h.quat);
 
       // --- Bras (IK) ---
-      _wrist.set(0, 0, GLOVE_WRIST_OFFSET).applyQuaternion(h.quat).add(h.pos);
+      _wrist.set(0, 0, FIST_WRIST_OFFSET).applyQuaternion(h.quat).add(h.pos);
       const hookW = punch.active && punch.def && punch.def.kind === 'hook' ? clamp(ext * 1.5, 0, 1) : 0;
       _pole.copy(h.shoulder).add(_tmp.set(h.side * (0.3 + hookW * 0.4), -0.55 + hookW * 0.5, 0.2));
       solveTwoBone(h.shoulder, _wrist, VM.upperArm, VM.forearm, _pole, h.elbow);
@@ -211,13 +197,13 @@ export class FirstPersonArms {
       placeBone(h.fore, h.elbow, _wrist, 1);
       // Bande de strapping au poignet
       _tmp.copy(h.elbow).sub(_wrist).normalize();
-      h.wrap.position.copy(_wrist).addScaledVector(_tmp, 0.03);
+      h.wrap.position.copy(_wrist).addScaledVector(_tmp, 0.012);
       h.wrap.quaternion.copy(h.fore.quaternion);
     }
   }
 
   dispose() {
-    for (const h of Object.values(this.hands)) disposeGlove(h.glove);
+    for (const h of Object.values(this.hands)) disposeFist(h.fist);
     this.skinMat.dispose();
     this.wrapMat.dispose();
     this.foreGeo.dispose();

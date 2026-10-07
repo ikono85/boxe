@@ -10,7 +10,7 @@
  *          ├ pelvis → spine (torsion, inclinaison) → neck → head
  *          └ membres (bras, jambes) placés chaque frame par IK dans le repère « body »
  *
- * Tout est piloté par l'état logique du Fighter : position des gants (même
+ * Tout est piloté par l'état logique du Fighter : position des poings (même
  * trajectoire que la détection des coups), décalages de tête des esquives,
  * réactions aux impacts, étourdissement, KO. Remplacer ce fichier par un
  * modèle riggé (glTF) ne demande que de reproduire `update()`.
@@ -20,7 +20,7 @@ import {
   Group, Mesh, SphereGeometry, CapsuleGeometry, CylinderGeometry, LatheGeometry, BoxGeometry,
   MeshStandardMaterial, Vector2, Vector3, Quaternion, Color,
 } from 'three';
-import { createGlove, disposeGlove, GLOVE_WRIST_OFFSET } from './GloveFactory.js';
+import { createFist, disposeFist, FIST_WRIST_OFFSET } from './FistFactory.js';
 import { solveTwoBone, placeBone, gloveQuaternion } from './Rig.js';
 import { GameConfig } from '../config/GameConfig.js';
 import { clamp, lerp, Ease, Spring, worldToLocal } from '../core/MathUtils.js';
@@ -172,10 +172,10 @@ export class BoxerModel {
     for (const hand of ['left', 'right']) {
       const upper = this._mesh(this._geo(new CapsuleGeometry(0.06 * build, ST.upperArm, 4, 12)), skin, this.body);
       const fore = this._mesh(this._geo(new CapsuleGeometry(0.052 * build, ST.forearm, 4, 12)), skin, this.body);
-      const glove = createGlove(hand, profile.gloves || 'cobalt', 1.03);
-      this.body.add(glove);
+      const fist = createFist(hand, look.skin || '#c98d66', 1.03);
+      this.body.add(fist);
       this.arms[hand] = {
-        hand, side: hand === 'left' ? -1 : 1, upper, fore, glove,
+        hand, side: hand === 'left' ? -1 : 1, upper, fore, fist,
         shoulderLocal: new Vector3((hand === 'left' ? -0.205 : 0.205) * build, 0.43, 0),
         pos: new Vector3(), quat: new Quaternion(),
         wrist: new Vector3(), pole: new Vector3(), // cibles IK du bras, dans le repère « body »
@@ -410,7 +410,7 @@ export class BoxerModel {
     f.punches.getGloveWorld(arm.hand, _w);
     this.body.worldToLocal(arm.pos.copy(_w));
 
-    // Victoire : gants au-dessus de la tête
+    // Victoire : poings au-dessus de la tête
     if (this.celebrate > 0.001) {
       _a.set(side * 0.24, 2.0 + Math.sin(this.time * 7 + side) * 0.04, -0.05);
       arm.pos.lerp(_a, Ease.inOutCubic(this.celebrate));
@@ -423,7 +423,7 @@ export class BoxerModel {
       arm.pos.lerp(_a, limp);
     }
 
-    // Un gant qui arrive dans l'objectif reste à distance (pas de gant « dans » la caméra)
+    // Un poing qui arrive dans l'objectif reste à distance (pas de poing « dans » la caméra)
     if (this.cameraLocal) {
       _a.copy(arm.pos).sub(this.cameraLocal);
       const d = _a.length();
@@ -454,11 +454,11 @@ export class BoxerModel {
       _qa.slerp(_qb, this.celebrate);
     }
     arm.quat.copy(_qa);
-    arm.glove.position.copy(arm.pos);
-    arm.glove.quaternion.copy(arm.quat);
+    arm.fist.position.copy(arm.pos);
+    arm.fist.quaternion.copy(arm.quat);
 
     // IK épaule → coude → poignet
-    _wr.set(0, 0, GLOVE_WRIST_OFFSET * 1.03).applyQuaternion(arm.quat).add(arm.pos);
+    _wr.set(0, 0, FIST_WRIST_OFFSET * 1.03).applyQuaternion(arm.quat).add(arm.pos);
     const hookW = punch.active && punch.def && punch.def.kind === 'hook' ? clamp(punch.extension * 1.5, 0, 1) : 0;
     _pole.copy(_sh).add(_v.set(side * (0.35 + hookW * 0.35), -0.6 + hookW * 0.55, 0.25));
     arm.wrist.copy(_wr);
@@ -506,7 +506,7 @@ export class BoxerModel {
   }
 
   dispose() {
-    for (const arm of Object.values(this.arms)) disposeGlove(arm.glove);
+    for (const arm of Object.values(this.arms)) disposeFist(arm.fist);
     for (const m of this.materials) m.dispose();
     for (const g of this.geometries) g.dispose();
     if (this.root.parent) this.root.parent.remove(this.root);
