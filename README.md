@@ -20,22 +20,42 @@
 
 ## 📸 Aperçu
 
-> Ajoutez vos captures et GIFs dans `docs/` — ils s'afficheront ici automatiquement.
-> Pour un GIF : enregistrez 5–10 s de jeu (ShareX, Peek, ou QuickTime + Gifski), puis
-> déposez le fichier sous le nom indiqué.
+Le plus simple reste d'**[essayer directement](https://ikono85.github.io/boxe/)** — le jeu
+se charge en quelques secondes, sans installation.
+
+<details>
+<summary><b>📷 Ajouter des captures et un GIF ici</b></summary>
+
+<br>
+
+Déposez vos fichiers dans `docs/`, puis décommentez le bloc correspondant ci-dessous dans
+le README.
+
+| Fichier attendu | Contenu suggéré |
+| --- | --- |
+| `docs/gameplay.gif` | 5–10 s d'échange : jab, esquive latérale, contre au corps |
+| `docs/shot-combat.png` | Vue de combat avec le HUD |
+| `docs/shot-dodge.png` | Une esquive latérale au moment de l'impact |
+| `docs/shot-ko.png` | L'écran de KO / la décision des juges |
+
+Pour capturer : `npm run dev`, puis **ShareX** (Windows), **Peek** (Linux) ou
+**⌘⇧5 + Gifski** (macOS). Visez 800–1000 px de large et moins de 5 Mo par GIF.
+
+```html
+<!-- Une fois les fichiers en place, retirez les balises de commentaire :
 
 <div align="center">
-
-<!-- Remplacez par votre enregistrement : docs/gameplay.gif -->
-<img src="docs/gameplay.gif" alt="Gameplay" width="80%">
-
-<em>Un échange : jab, esquive latérale, contre au corps.</em>
-
+  <img src="docs/gameplay.gif" alt="Gameplay" width="80%">
 </div>
 
 | Combat | Esquive & contre | KO |
 | :---: | :---: | :---: |
-| <img src="docs/shot-combat.png" alt="Combat" width="280"> | <img src="docs/shot-dodge.png" alt="Esquive" width="280"> | <img src="docs/shot-ko.png" alt="KO" width="280"> |
+| <img src="docs/shot-combat.png" width="280"> | <img src="docs/shot-dodge.png" width="280"> | <img src="docs/shot-ko.png" width="280"> |
+
+-->
+```
+
+</details>
 
 ---
 
