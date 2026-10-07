@@ -33,6 +33,7 @@ import { solveTwoBone, gloveQuaternion } from './Rig.js';
 import { loadGlb } from '../core/loadGlb.js';
 import { GameConfig } from '../config/GameConfig.js';
 import { clamp } from '../core/MathUtils.js';
+import { DIRS, directionWeights, movingAmount, blendNeed, pickTier, cycleTime } from './Footwork.js';
 
 import xbotUrl from '../assets/models/characters/xbot.glb?url';
 
@@ -66,6 +67,10 @@ const KO_CLIP_START = 1.05;
 /** Relevé : on remonte le clip de chute jusqu'à cet instant (juste avant la chute). */
 const KO_RISE_TO = 1.85;
 const RISE = GameConfig.knockdown.riseDuration;
+/** Relevé : fin du clip laissée de côté (le personnage y reprend sa garde tout seul). */
+const GETUP_TAIL = 0.35;
+/** Coups reçus : durée de clip jouée avant de rendre la main à la garde. */
+const REACT_END = { block: 0.8, hit: 1.05, big: 1.5 };
 
 const B = (n) => `mixamorig${n}`;
 
@@ -212,9 +217,10 @@ export class MixamoBoxerModel extends BoxerModel {
 
     const mixer = new AnimationMixer(scene);
     const actions = {};
+    const isLoco = (n) => /^step[FBLR][0-9]+$/.test(n);
     for (const [name, clip] of Object.entries(clips)) {
       const a = mixer.clipAction(clip);
-      const loop = name === 'idle' || name === 'step' || name === 'dizzy';
+      const loop = name === 'idle' || name === 'step' || name === 'dizzy' || isLoco(name);
       a.setLoop(loop ? LoopRepeat : LoopOnce, Infinity);
       a.clampWhenFinished = !loop;
       a.enabled = true;
@@ -258,6 +264,31 @@ export class MixamoBoxerModel extends BoxerModel {
       return h;
     };
     const scale = HEAD_HEIGHT / headCenter(new Vector3()).y;
+
+    // --- Jeu de jambes : paliers mesurés sur le déplacement de la racine ---
+    // Les clips de pas sont capturés avec leur déplacement. On le mesure ici
+    // (en mètres, une fois le personnage à l'échelle du jeu) pour pouvoir
+    // choisir l'amplitude et la vitesse de lecture qui collent à la vitesse
+    // demandée par le jeu. Le déplacement lui-même est annulé à l'affichage.
+    const loco = { f: [], b: [], l: [], r: [] };
+    for (const [dir, axis, sign] of [['f', 2, 1], ['b', 2, -1], ['l', 0, 1], ['r', 0, -1]]) {
+      for (let i = 1; i <= 9; i++) {
+        const name = `step${dir.toUpperCase()}${i}`;
+        const clip = clips[name];
+        if (!clip) continue;
+        const track = hipsTrack(name);
+        if (!track) continue;
+        const n = track.values.length / 3;
+        const d = (track.values[(n - 1) * 3 + axis] - track.values[axis]) * sign;
+        const disp = d * scale;
+        // Un clip qui ne va pas dans le sens attendu est écarté plutôt que subi
+        if (!(disp > 0.02)) continue;
+        loco[dir].push({ name, action: actions[name], disp, dur: clip.duration, speed: disp / clip.duration, w: 0 });
+      }
+      loco[dir].sort((a, b) => a.speed - b.speed);
+    }
+    const hasLoco = DIRS.some((d) => loco[d].length > 0);
+
     // Appuis de garde (repère du personnage) : les coups « miroir » gardent ces appuis
     const stance = {};
     for (const side of ['Left', 'Right']) {
@@ -338,6 +369,12 @@ export class MixamoBoxerModel extends BoxerModel {
       hitSerial: -1,
       ko: null,
       base: { idle: 1, step: 0, dizzy: 0 },
+      // Jeu de jambes : paliers par direction, part lissée de chaque direction,
+      // palier retenu (hystérésis) et phase commune à tous les clips actifs
+      loco, hasLoco,
+      locoShare: { f: 0, b: 0, l: 0, r: 0 },
+      locoTier: { f: -1, b: -1, l: -1, r: -1 },
+      locoPhase: 0,
       wArm: 1,
       wHead: 1,
       stanceW: 0,
@@ -390,18 +427,33 @@ export class MixamoBoxerModel extends BoxerModel {
       }
       if (R.ko && R.ko.action.time >= R.koLie) R.ko.action.timeScale = 0;
     } else if (R.ko) {
-      // Relevé après un knockdown : le clip de chute rejoué à l'envers, puis retour en garde
+      // Relevé après un knockdown : clip de relevé si le fichier en contient un,
+      // sinon repli sur le clip de chute rejoué à l'envers.
       const L = R.ko;
       const riseT = f.down ? f.down.riseT : 10;
       if (riseT < RISE) {
         if (!L.rising) {
           L.rising = true;
-          L.action.time = Math.min(L.action.time, R.koLie);
-          L.action.timeScale = -(L.action.time - KO_RISE_TO) / RISE;
+          if (R.clips.getUp) {
+            // Le clip de chute s'efface, le relevé prend la main. Sa fin (reprise
+            // de garde) est laissée de côté : la garde du jeu s'en charge.
+            L.target = 0;
+            L.rate = 1 / Math.max(0.12, RISE * 0.25);
+            const span = Math.max(0.3, R.clips.getUp.duration - GETUP_TAIL);
+            const g = this._layer('getUp', 'ko', { time: 0, timeScale: span / RISE, rate: 7 });
+            if (g) {
+              g.rising = true;
+              g.end = span;
+              R.ko = g;
+            }
+          } else {
+            L.action.time = Math.min(L.action.time, R.koLie);
+            L.action.timeScale = -(L.action.time - KO_RISE_TO) / RISE;
+          }
         }
-        if (riseT > RISE * 0.7) {
-          L.target = 0;
-          L.rate = 5;
+        if (riseT > RISE * 0.72 && R.ko) {
+          R.ko.target = 0;
+          R.ko.rate = 5;
         }
       } else {
         L.target = 0;
@@ -467,19 +519,27 @@ export class MixamoBoxerModel extends BoxerModel {
 
     const k = Math.min(1, dt * 6);
     const stunned = f.isStunned && !f.ko ? 1 : 0;
-    const moving = clamp(f.moveSpeed / 2.2, 0, 1);
     R.base.dizzy += (stunned - R.base.dizzy) * k;
-    R.base.step += (moving * 0.55 * (1 - R.base.dizzy) - R.base.step) * k;
-    R.base.idle = 1 - R.base.dizzy - R.base.step;
+
+    if (R.hasLoco) {
+      this._footwork(dt, f, k, baseW);
+    } else {
+      // Repli : l'ancien clip de pas unique, non directionnel
+      const moving = clamp(f.moveSpeed / 2.2, 0, 1);
+      R.base.step += (moving * 0.55 * (1 - R.base.dizzy) - R.base.step) * k;
+      R.base.idle = 1 - R.base.dizzy - R.base.step;
+      A.step.setEffectiveWeight(baseW * R.base.step);
+      A.step.timeScale = 0.8 + moving * 0.6;
+    }
     A.idle.setEffectiveWeight(baseW * R.base.idle);
-    A.step.setEffectiveWeight(baseW * R.base.step);
     A.dizzy.setEffectiveWeight(baseW * R.base.dizzy);
-    A.step.timeScale = 0.8 + moving * 0.6;
 
     // Poids des corrections : les coups reçus et le KO laissent jouer la capture
     let react = 0;
     for (const l of R.layers) if (l.kind === 'react') react = Math.max(react, l.w * (l.data ? 0.35 : 1));
-    const koW = R.ko ? R.ko.w : R.layers.reduce((m, l) => (l.kind === 'ko' ? Math.max(m, l.w) : m), 0);
+    // Max sur toutes les couches « ko » : pendant la bascule chute → relevé, les
+    // deux clips coexistent et les corrections ne doivent pas revenir d'un coup.
+    const koW = R.layers.reduce((m, l) => (l.kind === 'ko' ? Math.max(m, l.w) : m), 0);
     const celebrate = this.celebrate;
     let wArm = 1 - react * 0.75 - R.base.dizzy * 0.5;
     let wHead = 1 - react * 0.65 - R.base.dizzy * 0.45;
@@ -506,6 +566,69 @@ export class MixamoBoxerModel extends BoxerModel {
     /* ---- Corrections procédurales ---- */
     this._correctBody(R.wHead);
     this._driveArms(R.wArm);
+  }
+
+  /**
+   * Jeu de jambes : répartit le déplacement sur les clips de pas, choisit
+   * l'amplitude de chaque direction et garde les clips actifs en phase.
+   *
+   * La phase est pilotée à la main (`timeScale = 0`, `time` posé à chaque
+   * image) : c'est le seul moyen de garantir que deux clips mélangés restent
+   * exactement au même point de leur cycle. Laissés au mixer, ils dérivent et
+   * les jambes se contredisent (un clip pose le pied droit pendant que l'autre
+   * le lève).
+   */
+  _footwork(dt, f, k, baseW) {
+    const R = this.rig;
+    // Vitesse dans le repère du boxeur : avant = forwardFromYaw, droite = rightFromYaw
+    const c = Math.cos(f.yaw);
+    const s = Math.sin(f.yaw);
+    const vf = -f.velocity.x * s - f.velocity.z * c;
+    const vr = f.velocity.x * c - f.velocity.z * s;
+    const w = directionWeights(vf, vr);
+    const moving = movingAmount(w.speed) * (1 - R.base.dizzy);
+
+    const active = [];
+    for (const d of DIRS) {
+      R.locoShare[d] += (w[d] * moving - R.locoShare[d]) * k;
+      const tiers = R.loco[d];
+      for (const t of tiers) t.w = 0;
+      const share = R.locoShare[d];
+      if (!tiers.length || share < 0.01) {
+        R.locoTier[d] = -1;
+        continue;
+      }
+      // Vitesse demandée : la composante le long de cette direction, rapportée
+      // au poids du clip dans le mélange (voir Footwork.blendNeed)
+      const need = blendNeed(d === 'f' || d === 'b' ? vf : vr, share);
+      const i = pickTier(tiers, need, R.locoTier[d]);
+      R.locoTier[d] = i;
+      const tier = tiers[i];
+      tier.w = share;
+      active.push({ tier, share, need, disp: tier.disp, dur: tier.dur });
+    }
+
+    const cycle = cycleTime(active);
+    if (cycle > 0) R.locoPhase = (R.locoPhase + dt / cycle) % 1;
+
+    let total = 0;
+    for (const a of active) total += a.share;
+    for (const d of DIRS) {
+      for (const t of R.loco[d]) {
+        if (t.w <= 0) {
+          t.action.setEffectiveWeight(0);
+          continue;
+        }
+        t.action.timeScale = 0;
+        t.action.time = R.locoPhase * t.dur;
+        t.action.setEffectiveWeight(baseW * t.w);
+      }
+    }
+    R.base.step = 0;
+    if (R.actions.step) R.actions.step.setEffectiveWeight(0);
+    // La garde ne comble que ce que le jeu de jambes ne couvre pas : la mélanger
+    // davantage diluerait les pas et ferait patiner les pieds.
+    R.base.idle = Math.max(0, 1 - R.base.dizzy - total);
   }
 
   _onPunchClip(p) {
@@ -540,8 +663,11 @@ export class MixamoBoxerModel extends BoxerModel {
       clip = hr.kind === 'straight' ? 'blockC' : hr.side > 0 ? 'blockL' : 'blockR';
       weight = 0.8;
     } else if (hr.zone === 'body') clip = n % 2 ? 'bodyHit1' : 'bodyHit2';
-    else if (hr.kind === 'uppercut') clip = hr.strength > 1.2 ? 'upperHitHeavy' : 'upperHitLight';
-    else clip = ['headHit1', 'headHit2', 'headHit3'][n % 3];
+    else if (hr.kind === 'uppercut') {
+      // Uppercut critique : la grosse réaction si le fichier la contient
+      if (hr.strength > 1.2) clip = R.actions.upperHitBig ? 'upperHitBig' : 'upperHitHeavy';
+      else clip = 'upperHitLight';
+    } else clip = ['headHit1', 'headHit2', 'headHit3'][n % 3];
     if (!R.actions[clip]) return;
     this._fadeOut('punch', 10);
     this._fadeOut('react', 10);
@@ -554,8 +680,11 @@ export class MixamoBoxerModel extends BoxerModel {
     });
     if (!l) return;
     l.data = hr.blocked ? 'block' : null;
-    // Fin anticipée : on rend la main avant le long retour en garde du clip
-    l.end = Math.min(dur - 0.25, hr.blocked ? 0.8 : 1.05);
+    // Fin anticipée : on rend la main avant le long retour en garde du clip.
+    // La grosse réaction d'uppercut garde plus de temps : c'est un encaissement
+    // qui doit se voir jusqu'au bout du déséquilibre.
+    const span = hr.blocked ? REACT_END.block : clip === 'upperHitBig' ? REACT_END.big : REACT_END.hit;
+    l.end = Math.min(dur - 0.25, span);
   }
 
   /* ---------- Corrections ---------- */

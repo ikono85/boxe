@@ -46,7 +46,7 @@ export const GameConfig = {
     mandatory: 8, // compte obligatoire
     minRiseCount: 2, // on ne se relève pas avant « 2 »
     maxPerRound: 3, // 3e knockdown dans le round = KO technique
-    riseDuration: 1.1, // temps pour se relever (animation)
+    riseDuration: 1.6, // temps pour se relever (durée du clip « getUp », joué à ~1,5×)
     hpAfter: [0.6, 0.45, 0.32], // vie retrouvée après le 1er / 2e / 3e knockdown
     mashNeed: [6, 9, 13], // joueur : appuis sur les coups pour se relever
     mashDecay: 1.3, // appuis « perdus » par seconde
