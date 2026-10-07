@@ -27,7 +27,6 @@ export const BOXERS = {
     nickname: 'Coin rouge',
     corner: 'red',
     stats: { power: 1, speed: 1, defense: 1, staminaMax: 100, staminaRegen: 1, chin: 1 },
-    gloves: 'crimson',
     look: { skin: '#c98d66' },
   },
 
@@ -38,7 +37,6 @@ export const BOXERS = {
     corner: 'blue',
     hometown: 'Lyon',
     stats: { power: 0.82, speed: 0.9, defense: 0.88, staminaMax: 100, staminaRegen: 0.9, chin: 0.85 },
-    gloves: 'emerald',
     look: {
       skin: '#e2b08a', hair: '#4a2c18', hairStyle: 'crop', beard: false,
       shorts: '#1f8a52', trim: '#f4f1e6', shoes: '#f2f2f2', build: 0.94, height: 1.0,
@@ -56,7 +54,6 @@ export const BOXERS = {
     corner: 'blue',
     hometown: 'Marseille',
     stats: { power: 1, speed: 1.06, defense: 1, staminaMax: 100, staminaRegen: 1, chin: 1 },
-    gloves: 'cobalt',
     look: {
       skin: '#a8714c', hair: '#161211', hairStyle: 'fade', beard: true,
       shorts: '#1d4fd8', trim: '#f5c542', shoes: '#16181d', build: 1.0, height: 0.98,
@@ -74,7 +71,6 @@ export const BOXERS = {
     corner: 'blue',
     hometown: 'Prague',
     stats: { power: 1.1, speed: 1.04, defense: 1.08, staminaMax: 105, staminaRegen: 1.1, chin: 1.2 },
-    gloves: 'onyx',
     look: {
       skin: '#e8c3a3', hair: '#c9b48a', hairStyle: 'buzz', beard: false,
       shorts: '#0f1115', trim: '#d62828', shoes: '#0f1115', build: 1.08, height: 1.04,
@@ -94,7 +90,6 @@ export const BOXERS = {
     corner: 'blue',
     hometown: 'Saint-Étienne',
     stats: { power: 1.26, speed: 0.93, defense: 1.1, staminaMax: 110, staminaRegen: 1, chin: 1.4 },
-    gloves: 'gold',
     look: { shorts: '#8c1c13', body: '#b9b4ab', model: 'xbot' },
     tape: { age: 29, height: 181, reach: 183, weight: 86, record: '22-3-0', kos: 19 },
     style: 'Avance sans reculer, encaisse derrière sa garde et cherche le gros coup. Gardez vos distances, faites-le tourner.',
@@ -108,7 +103,6 @@ export const BOXERS = {
     corner: 'blue',
     hometown: 'Bordeaux',
     stats: { power: 0.86, speed: 1.1, defense: 0.98, staminaMax: 105, staminaRegen: 1.1, chin: 0.9 },
-    gloves: 'teal',
     look: { shorts: '#0f8b8d', body: '#d3d8dc', model: 'xbot' },
     tape: { age: 24, height: 184, reach: 191, weight: 69, record: '15-1-0', kos: 4 },
     style: 'Tourne sans arrêt et vous tient au bout de son jab. Coupez-lui la route vers les cordes, il encaisse mal.',
@@ -122,7 +116,6 @@ export const BOXERS = {
     corner: 'blue',
     hometown: 'Lille',
     stats: { power: 0.84, speed: 1.08, defense: 0.92, staminaMax: 115, staminaRegen: 1.15, chin: 1 },
-    gloves: 'violet',
     look: { shorts: '#6b2bb8', body: '#c9ccd2', model: 'xbot' },
     tape: { age: 26, height: 170, reach: 172, weight: 63, record: '18-4-0', kos: 8 },
     style: 'Colle à vous et enchaîne sans s’arrêter, surtout au corps. Bloquez bas, esquivez et contrez entre ses séries.',
@@ -136,7 +129,6 @@ export const BOXERS = {
     corner: 'blue',
     hometown: 'Nice',
     stats: { power: 1.06, speed: 1.02, defense: 1.12, staminaMax: 100, staminaRegen: 1.05, chin: 1 },
-    gloves: 'silver',
     look: { shorts: '#c48a1a', body: '#a9adb4', model: 'xbot' },
     tape: { age: 33, height: 186, reach: 188, weight: 79, record: '27-2-1', kos: 14 },
     style: 'Attend que vous attaquiez, puis punit chaque erreur. Feintez, frappez court et ne restez pas devant lui.',
@@ -156,17 +148,3 @@ export function opponentFor(choice, difficulty) {
 /** Adversaires proposés dans le menu « Adversaire » (après « Selon le niveau »). */
 export const OPPONENT_ORDER = ['rookie', 'tempest', 'hammer', 'bulldozer', 'eel', 'gatling', 'sniper'];
 
-/**
- * Skins de gants : il suffit d'ajouter une entrée pour créer un nouveau skin.
- * color = cuir, cuff = manchette, accent = bande / logo, gloss = brillance (0-1).
- */
-export const GLOVE_SKINS = {
-  crimson: { color: '#c8161d', cuff: '#f4f1e8', accent: '#111111', gloss: 0.62 },
-  cobalt: { color: '#1846c9', cuff: '#f4f1e8', accent: '#f5c542', gloss: 0.6 },
-  emerald: { color: '#14824a', cuff: '#f4f1e8', accent: '#0d0d0d', gloss: 0.55 },
-  onyx: { color: '#17181c', cuff: '#d62828', accent: '#e9e9e9', gloss: 0.7 },
-  gold: { color: '#c9962e', cuff: '#151515', accent: '#ffffff', gloss: 0.8 },
-  teal: { color: '#0f8b8d', cuff: '#f4f1e8', accent: '#111111', gloss: 0.6 },
-  violet: { color: '#6b2bb8', cuff: '#f4f1e8', accent: '#f5c542', gloss: 0.62 },
-  silver: { color: '#b9bec6', cuff: '#1a1a1a', accent: '#c48a1a', gloss: 0.85 },
-};

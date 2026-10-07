@@ -6,7 +6,7 @@
  * uppercut, parades, coups reçus, étourdissement, KO).
  *
  * Animation hybride :
- *  1. BoxerModel calcule la pose « logique » : position des gants sur la
+ *  1. BoxerModel calcule la pose « logique » : position des poings sur la
  *     trajectoire qui sert à la détection des coups, tête (esquives), etc. ;
  *  2. un AnimationMixer joue les clips Mixamo : garde/pas en boucle, coups
  *     calés pour que l'impact du clip tombe à l'impact du jeu, réactions
@@ -14,11 +14,11 @@
  *  3. des corrections procédurales ramènent ensuite le corps sur la logique :
  *     bassin et colonne (la tête suit la tête logique : les esquives se voient
  *     et la zone touchée correspond à ce qu'on voit), bras par IK à deux os
- *     vers les gants logiques (le coude garde la forme du clip), pieds
+ *     vers les poings logiques (le coude garde la forme du clip), pieds
  *     maintenus au sol. Ces corrections s'effacent pendant les coups reçus
  *     et le KO pour laisser vivre la capture.
  *
- * Les gants de boxe du jeu sont fixés aux mains du personnage.
+ * Les boxeurs frappent à mains nues : le personnage garde ses propres mains.
  * Tant que le fichier n'est pas chargé (ou s'il ne se charge pas), le boxeur
  * en primitives reste affiché.
  */
@@ -28,7 +28,7 @@ import {
   QuaternionKeyframeTrack, VectorKeyframeTrack, Color,
 } from 'three';
 import { BoxerModel } from './BoxerModel.js';
-import { createGlove, disposeGlove, GLOVE_WRIST_OFFSET } from './GloveFactory.js';
+import { FIST_WRIST_OFFSET } from './FistFactory.js';
 import { solveTwoBone, gloveQuaternion } from './Rig.js';
 import { loadGlb } from '../core/loadGlb.js';
 import { GameConfig } from '../config/GameConfig.js';
@@ -44,9 +44,6 @@ export const MIXAMO_MODELS = {
 
 /** Hauteur du centre de la tête en garde (repère du boxeur, m) : celle de la tête logique. */
 const HEAD_HEIGHT = 1.6;
-/** Taille des mains sous les gants. */
-const HAND_SCALE = 0.75;
-const GLOVE_SCALE = 1.03;
 
 /**
  * Coups → clip, instant de l'impact dans le clip (s), clip miroir (main gauche
@@ -296,7 +293,7 @@ export class MixamoBoxerModel extends BoxerModel {
       stance[side] = { p: foot.getWorldPosition(new Vector3()), q: foot.getWorldQuaternion(new Quaternion()) };
     }
 
-    // --- Pose de liaison (T-pose) pour fixer les gants aux mains ---
+    // --- Pose de liaison (T-pose) pour repérer le poing dans la main ---
     for (const [o, p, q] of rest) {
       o.position.copy(p);
       o.quaternion.copy(q);
@@ -309,24 +306,26 @@ export class MixamoBoxerModel extends BoxerModel {
       const low = bone(`${side}ForeArm`);
       const wr = bone(`${side}Hand`);
       const mid = bones[B(`${side}HandMiddle1`)];
-      wr.scale.setScalar(HAND_SCALE);
-      wr.updateWorldMatrix(false, true);
-      // Gant : jointures dans l'axe des doigts, dos de la main vers le haut (T-pose, paumes en bas)
+      // Le personnage a ses propres mains : rien à monter dessus. On relève
+      // seulement où se trouve le centre du poing dans le repère de la main,
+      // car `_driveArms` s'en sert à l'envers pour placer la main de façon que
+      // le poing tombe sur le point de frappe logique du jeu.
+      // Jointures dans l'axe des doigts, dos de la main vers le haut (T-pose, paumes en bas).
       const W = wr.getWorldPosition(new Vector3());
       const F = mid ? mid.getWorldPosition(new Vector3()).sub(W).normalize() : new Vector3(hand === 'left' ? 1 : -1, 0, 0);
       const gq = gloveQuaternion(F, _v.set(0, 1, 0), new Quaternion());
-      const gp = W.clone().addScaledVector(F, (GLOVE_WRIST_OFFSET * GLOVE_SCALE) / scale);
-      _m.compose(gp, gq, _sc.setScalar(GLOVE_SCALE / scale));
+      const gp = W.clone().addScaledVector(F, FIST_WRIST_OFFSET / scale);
+      _m.compose(gp, gq, _sc.setScalar(1));
       _m2.copy(wr.matrixWorld).invert().multiply(_m);
-      const glove = createGlove(hand, profile.gloves || 'cobalt', 1);
-      _m2.decompose(glove.position, glove.quaternion, glove.scale);
-      wr.add(glove);
+      const fistLocalP = new Vector3();
+      const fistLocalQ = new Quaternion();
+      _m2.decompose(fistLocalP, fistLocalQ, _sc);
       arms[hand] = {
-        up, low, wr, glove,
+        up, low, wr,
         upDir: low.position.clone().normalize(),
         lowDir: wr.position.clone().normalize(),
-        gloveLocalQ: glove.quaternion.clone(),
-        gloveLocalP: glove.position.clone(),
+        fistLocalQ,
+        fistLocalP,
       };
     }
     const legs = {};
@@ -768,12 +767,12 @@ export class MixamoBoxerModel extends BoxerModel {
       const pole = _p.copy(_e);
 
       // Gant logique (monde) → main visée : main = gant ∘ (gant dans le repère de la main)⁻¹
-      this.body.localToWorld(_g.copy(arm.glove.position));
+      this.body.localToWorld(_g.copy(arm.fist.position));
       _q.copy(_qg).multiply(arm.quat); // orientation monde du gant
-      _q2.copy(L.gloveLocalQ).invert();
+      _q2.copy(L.fistLocalQ).invert();
       _q.multiply(_q2); // orientation monde de la main
       L.wr.getWorldScale(_sc);
-      _t.copy(L.gloveLocalP).multiply(_sc).applyQuaternion(_q);
+      _t.copy(L.fistLocalP).multiply(_sc).applyQuaternion(_q);
       _t.subVectors(_g, _t); // position monde de la main
 
       // Mélange capture ↔ logique
@@ -823,9 +822,8 @@ export class MixamoBoxerModel extends BoxerModel {
     this.disposed = true;
     if (this.rig) {
       this.rig.mixer.stopAllAction();
-      for (const a of Object.values(this.rig.arms)) disposeGlove(a.glove);
       this.rig.scene.traverse((o) => {
-        if (!o.isMesh || (o.parent && o.parent.name.startsWith('glove-'))) return; // gants : géométries partagées
+        if (!o.isMesh) return;
         o.geometry.dispose();
         for (const m of [].concat(o.material)) m.dispose();
       });
