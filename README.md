@@ -109,6 +109,27 @@ Déploiement automatique sur GitHub Pages à chaque push sur `main`
 Les touches sont déclarées **par position physique** (`KeyboardEvent.code`) dans
 `src/config/Controls.js` : ZQSD et WASD fonctionnent quel que soit le clavier.
 
+### 🎮 Manette
+
+Branchez une manette (Xbox, PlayStation, Switch Pro… disposition standard) et appuyez sur
+un bouton : elle est reconnue tout de suite, en solo comme en ligne, sans verrouiller la
+souris.
+
+| Manette (noms Xbox) | Action |
+| --- | --- |
+| Stick gauche (ou croix) | Se déplacer |
+| Stick droit | Regarder et viser (même sensibilité que la souris) |
+| `X` / `Y` | **Jab** / **Direct** |
+| `A` / `B` | **Crochet** gauche / droit |
+| `LB` / `RB` | **Uppercut** gauche / droit |
+| `LT` (maintenir) | **Garde** |
+| `RT` + stick gauche | **Esquive** : côté, recul, tête baissée |
+| `L3` | Baisser la tête |
+| `Start` | Pause / reprise |
+| `Back` | Afficher / masquer l'aide |
+
+Dans les menus : la croix (ou le stick) choisit, `A` valide, `B` revient.
+
 ---
 
 ## 🥊 Ce qui se passe sur le ring
@@ -151,9 +172,16 @@ déplace moins vite. On récupère au repos, moins en se déplaçant, encore moi
 Toucher pendant son coup (*contre*), juste après son coup raté (*punition*) ou juste après
 avoir esquivé / bloqué (*riposte*) = bonus de dégâts et de chances de critique.
 
-**💥 Critiques, étourdissement, KO**
+**💥 Critiques, étourdissement**
 Les coups propres à la tête remplissent une jauge ; pleine, le boxeur est sonné (garde
-baissée, titube). 0 HP = KO.
+baissée, titube).
+
+**🔟 Knockdown et compte de l'arbitre**
+À 0 HP, le boxeur va au tapis et l'arbitre compte (chrono arrêté, l'autre boxeur recule).
+Pour vous relever, **martelez vos coups** avant 10 — il en faut plus à chaque knockdown.
+Relevé : compte obligatoire jusqu'à 8, puis « BOX ! » avec une partie de la vie.
+Compté dix = **KO** ; trois knockdowns dans le round = **KO technique** ; chez les juges,
+un knockdown coûte un point de plus (10-8).
 
 **🔗 Combos** *(fenêtre courte, anticipation raccourcie)*
 Jab → Direct · Jab → Jab → Direct · Jab → Crochet → Uppercut · Jab → Direct → Crochet ·
@@ -222,6 +250,20 @@ est exacte et qu'un rollback retombe sur le même combat.
 | 🟡 **Équilibré** | Marco « La Tempête » Reyes | Attaque régulièrement, esquive, bloque, contre parfois, tourne autour de vous |
 | 🔴 **Expert** | Viktor « Le Marteau » Kral | Analyse vos habitudes (coup favori, enchaînements, esquives), contre, feinte, varie ses coups, gère son souffle et passe à l'attaque dès que vous êtes touché |
 
+Dans **Adversaire**, choisissez aussi un boxeur au **style marqué** : le niveau règle ses
+réflexes et sa lecture du combat, le style sa façon de boxer (`src/config/Styles.js`).
+
+| Boxeur | Style | Comment il boxe |
+| :--- | :--- | :--- |
+| 🟠 Bruno « Le Bulldozer » Ferrand | Cogneur | Avance sans reculer, garde fermée, crochets, uppercuts et corps ; lent mais lourd, solide menton |
+| 🔵 Yanis « L'Anguille » Belkacem | Danseur | Tourne sans arrêt, vit au bout de son jab, esquive beaucoup et ressort aussitôt ; encaisse mal |
+| 🟣 Kenji « La Mitraillette » Moreau | Pression | Colle à vous et enchaîne de longues séries, surtout au corps ; souffle hors norme, coups légers |
+| 🟡 Dmitri « Le Sniper » Volkov | Contreur | Laisse venir, bloque ou esquive, puis punit chaque coup raté |
+
+Un **arbitre** (X Bot en noir et blanc) suit le combat sur le côté, compte au-dessus du
+boxeur au tapis en abaissant le bras à chaque chiffre (avec la voix du navigateur quand
+elle existe) et arrête le combat au KO.
+
 L'IA (`src/game/AI.js`) **ne triche pas** : elle passe par les mêmes règles que le joueur
 (endurance, timings, détection). Elle gère la distance, tourne pour ne pas rester dans les
 cordes, entre, enchaîne et ressort, récupère quand elle est fatiguée, réagit aux coups après
@@ -244,9 +286,10 @@ src/
  │   ├── GameConfig.js       ring, vitesses, endurance, esquives, dégâts, caméra, qualité
  │   ├── Punches.js          coups (timings, dégâts, portée…) et combos
  │   ├── Boxers.js           boxeurs (stats, apparence, fiche) et skins de gants
- │   ├── Difficulty.js       profils d'IA
- │   └── Controls.js         touches
- ├── core/                   EventBus, Input (Pointer Lock), Settings, MathUtils, Random
+ │   ├── Difficulty.js       profils d'IA (talent : réflexes, précision, lecture)
+ │   ├── Styles.js           styles de combat (cogneur, danseur, pression, contreur)
+ │   └── Controls.js         touches et boutons de manette
+ ├── core/                   EventBus, Input (Pointer Lock, manette), Settings, MathUtils, Random
  ├── game/
  │   ├── Game.js             boucle, états (menu / combat / pause / résultats)
  │   ├── Fighter.js          logique commune : vie, endurance, garde, esquives, stun, KO
@@ -254,16 +297,17 @@ src/
  │   ├── Opponent.js         boxeur IA
  │   ├── AI.js               cerveau de l'adversaire
  │   ├── CombatSystem.js     résolution des coups, dégâts, contres, critiques, score
- │   ├── RoundSystem.js      rounds, chrono, pauses, juges, décision
+ │   ├── RoundSystem.js      rounds, chrono, pauses, compte de l'arbitre, juges, décision
  │   └── MatchStats.js       statistiques
  ├── combat/
  │   ├── PunchSystem.js      machine à états des coups, combos, buffer d'entrée
  │   ├── HitDetection.js     balayage gant / volumes (tête, corps, gardes)
  │   └── StaminaSystem.js    endurance
  ├── characters/             RiggedBoxerModel, BoxerModel, FirstPersonArms, GloveFactory, Rig
- ├── world/                  Arena, Ring (cordes déformables), Lighting, Audience, Textures
+ ├── world/                  Arena, Ring (cordes déformables), Referee (arbitre), Lighting, Audience, Textures
  ├── fx/                     CameraRig (secousses, chute KO), ImpactEffects, ScreenEffects
- ├── ui/                     HUD, Menu, OnlinePanel, PauseMenu, OptionsPanel, RoundOverlay, ResultScreen
+ ├── ui/                     HUD, Menu, OnlinePanel, PauseMenu, OptionsPanel, RoundOverlay, ResultScreen,
+ │                           PadNav (menus à la manette)
  ├── net/                    en ligne : Netcode (PeerJS + rollback), OnlineWorld, SimState, Command
  ├── audio/                  AudioManager, SoundLibrary (catalogue), SoundSynth (synthèse)
  ├── styles/main.css
@@ -291,7 +335,8 @@ src/
 
 | Je veux… | Où |
 | --- | --- |
-| **Un nouveau boxeur** | Une entrée dans `BOXERS` (`config/Boxers.js`), puis `opponent: 'sonId'` dans un profil de `Difficulty.js` |
+| **Un nouveau boxeur** | Une entrée dans `BOXERS` (`config/Boxers.js`) avec son `fightStyle`, puis son id dans `OPPONENT_ORDER` (menu « Adversaire ») ou `opponent: 'sonId'` dans un profil de `Difficulty.js` |
+| **Un nouveau style** | Une entrée dans `FIGHT_STYLES` (`config/Styles.js`) : multiplicateurs des valeurs du niveau, distance de travail, coups et enchaînements favoris |
 | **Un personnage Mixamo** | Exportez le personnage et ses clips en `.glb` (voir `src/assets/models/README.md`), puis `node scripts/optimize-character.mjs <entrée> <sortie>`, une ligne dans `MIXAMO_MODELS` (`characters/MixamoBoxerModel.js`) et `look.model` |
 | **Un nouveau personnage 3D** | Un `.glb` au squelette Quaternius (`Hips`, `Chest`, `UpperArm.L`…) dans `src/assets/models/characters/`, une ligne dans `CHARACTER_MODELS` (`characters/RiggedBoxerModel.js`), puis `look.model` |
 | **Un skin de gants** | Une entrée dans `GLOVE_SKINS` ; `gloves: 'sonNom'` sur un boxeur |

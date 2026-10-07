@@ -31,6 +31,7 @@ import { BoxerModel } from './BoxerModel.js';
 import { createGlove, disposeGlove, GLOVE_WRIST_OFFSET } from './GloveFactory.js';
 import { solveTwoBone, gloveQuaternion } from './Rig.js';
 import { loadGlb } from '../core/loadGlb.js';
+import { GameConfig } from '../config/GameConfig.js';
 import { clamp } from '../core/MathUtils.js';
 
 import xbotUrl from '../assets/models/characters/xbot.glb?url';
@@ -62,6 +63,9 @@ const PUNCH_CLIPS = {
 const PUNCH_LEAD = 0.42;
 /** Début du clip KO (avant : garde immobile). */
 const KO_CLIP_START = 1.05;
+/** Relevé : on remonte le clip de chute jusqu'à cet instant (juste avant la chute). */
+const KO_RISE_TO = 1.85;
+const RISE = GameConfig.knockdown.riseDuration;
 
 const B = (n) => `mixamorig${n}`;
 
@@ -386,9 +390,24 @@ export class MixamoBoxerModel extends BoxerModel {
       }
       if (R.ko && R.ko.action.time >= R.koLie) R.ko.action.timeScale = 0;
     } else if (R.ko) {
-      R.ko.target = 0;
-      R.ko.rate = 4;
-      R.ko = null;
+      // Relevé après un knockdown : le clip de chute rejoué à l'envers, puis retour en garde
+      const L = R.ko;
+      const riseT = f.down ? f.down.riseT : 10;
+      if (riseT < RISE) {
+        if (!L.rising) {
+          L.rising = true;
+          L.action.time = Math.min(L.action.time, R.koLie);
+          L.action.timeScale = -(L.action.time - KO_RISE_TO) / RISE;
+        }
+        if (riseT > RISE * 0.7) {
+          L.target = 0;
+          L.rate = 5;
+        }
+      } else {
+        L.target = 0;
+        L.rate = 4;
+        R.ko = null;
+      }
     }
 
     const hr = f.hitReact;
@@ -478,7 +497,8 @@ export class MixamoBoxerModel extends BoxerModel {
 
     // Le jeu déplace le boxeur : on retire le déplacement horizontal des clips (sauf KO)
     const hips = R.hips;
-    const free = clamp(koW, 0, 1);
+    // Au tapis : le corps reste près de sa position logique (le clip l'emmène loin sur le côté)
+    const free = clamp(koW, 0, 1) * 0.3;
     hips.position.x += (R.idleHips.x - hips.position.x) * (1 - free);
     hips.position.z += (R.idleHips.z - hips.position.z) * (1 - free);
     R.holder.updateMatrixWorld(true);

@@ -16,7 +16,9 @@
  *  5. Adaptation    (expert) statistiques des habitudes du joueur : coup favori,
  *                   enchaînements, esquives préférées, usage de la garde.
  *
- * Le niveau de difficulté (Difficulty.js) règle chaque couche.
+ * Le niveau de difficulté (Difficulty.js) règle chaque couche ; le style du
+ * boxeur (Styles.js : cogneur, danseur, mitraillette, contreur) module sa
+ * façon de boxer.
  */
 
 import { PUNCHES } from '../config/Punches.js';
@@ -261,6 +263,11 @@ export class AI {
       // Dernier round et en retard aux points : il prend des risques
       const ctx = this.context;
       if (ctx.round >= ctx.totalRounds && f.matchStats.damage < pl.matchStats.damage) want += 0.12 * this.level;
+      // Contreur : il laisse venir, sauf si le joueur ne fait rien depuis longtemps
+      if (p.waitCounter && this.state !== 'kill') {
+        const idle = this.time - this.habits.lastPunchTime;
+        if (idle < 3.5) want *= 0.35;
+      }
       if (chance(want)) this._planAttack();
     }
   }
@@ -282,11 +289,14 @@ export class AI {
     // Combo ou coup isolé
     let seq;
     if (chance(p.comboSkill)) {
+      // Répertoire commun (selon le niveau) + enchaînements favoris du style
+      const list = COMBO_REPERTOIRE.filter((c) => c.level <= this.level);
+      if (p.combos) for (const c of p.combos) list.push({ seq: c.seq, weight: c.weight * 1.6 });
       const options = {};
-      COMBO_REPERTOIRE.forEach((c, i) => {
-        if (c.level <= this.level) options[i] = c.weight;
+      list.forEach((c, i) => {
+        options[i] = c.weight;
       });
-      seq = [...COMBO_REPERTOIRE[Number(weightedPick(options))].seq];
+      seq = [...list[Number(weightedPick(options))].seq];
     } else {
       seq = [weightedPick(p.punchWeights)];
     }
@@ -343,7 +353,8 @@ export class AI {
   _afterAttack() {
     if (this.state === 'kill') return; // on reste au contact
     // Entrer, frapper, ressortir : sauf les boxeurs très agressifs
-    if (chance(1 - this.p.aggression * 0.6)) this.exitTimer = range(0.45, 1);
+    const exit = this.p.exitRate ?? 1 - this.p.aggression * 0.6;
+    if (chance(exit)) this.exitTimer = range(0.45, 1);
     this._setState('neutral');
   }
 
@@ -504,10 +515,10 @@ export class AI {
         desired = this.plan.length ? this.attackDistance - 0.06 : 0.92;
         break;
       case 'defend':
-        desired = p.preferredRange + 0.35;
+        desired = p.preferredRange + 0.35 * (1 - (p.pressure || 0));
         break;
       case 'recover':
-        desired = p.preferredRange + 0.8;
+        desired = p.preferredRange + 0.8 * (1 - (p.pressure || 0) * 0.5);
         break;
       default:
         desired = p.preferredRange + (this.exitTimer > 0 ? 0.4 : 0);

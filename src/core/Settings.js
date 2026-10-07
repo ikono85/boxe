@@ -19,6 +19,7 @@ export const DEFAULT_SETTINGS = {
   showFps: false,
   showControls: true,
   difficulty: 'intermediate',
+  opponent: 'auto', // 'auto' = l'adversaire du niveau, sinon une clé de BOXERS
   rounds: 3,
   roundDuration: 60,
   netName: '', // en ligne : nom affiché à l'adversaire

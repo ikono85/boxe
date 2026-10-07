@@ -22,14 +22,16 @@ import {
 import { EventBus } from '../core/EventBus.js';
 import { Input } from '../core/Input.js';
 import { GameConfig } from '../config/GameConfig.js';
-import { BOXERS } from '../config/Boxers.js';
+import { BOXERS, opponentFor } from '../config/Boxers.js';
 import { DIFFICULTIES } from '../config/Difficulty.js';
+import { buildAIProfile } from '../config/Styles.js';
 import { Player } from './Player.js';
 import { Opponent } from './Opponent.js';
 import { CombatSystem } from './CombatSystem.js';
 import { RoundSystem } from './RoundSystem.js';
 import { AI } from './AI.js';
 import { Arena } from '../world/Arena.js';
+import { Referee } from '../world/Referee.js';
 import { createBoxerModel } from '../characters/createBoxerModel.js';
 import { FirstPersonArms } from '../characters/FirstPersonArms.js';
 import { CameraRig } from '../fx/CameraRig.js';
@@ -41,6 +43,7 @@ import { Menu } from '../ui/Menu.js';
 import { PauseMenu } from '../ui/PauseMenu.js';
 import { ResultScreen } from '../ui/ResultScreen.js';
 import { RoundOverlay } from '../ui/RoundOverlay.js';
+import { PadNav } from '../ui/PadNav.js';
 import { clock } from '../ui/dom.js';
 import { clamp } from '../core/MathUtils.js';
 import { OnlinePanel } from '../ui/OnlinePanel.js';
@@ -50,6 +53,8 @@ import { packCommand, pressedMask, commandFromInput, emptyCommand } from '../net
 const START_PLAYER = new Vector3(0, 0, 1.45);
 const START_OPPONENT = new Vector3(0, 0, -1.45);
 const SCORE_MULT = { beginner: 1, intermediate: 1.5, expert: 2.2 };
+/** Compte de l'arbitre (synthèse vocale du navigateur, si disponible). */
+const COUNT_WORDS = ['Un', 'Deux', 'Trois', 'Quatre', 'Cinq', 'Six', 'Sept', 'Huit', 'Neuf', 'Dix'];
 
 const _v = new Vector3();
 const _right = new Vector3();
@@ -98,13 +103,16 @@ export class Game {
     // --- Boxeurs ---
     this.player = new Player({ id: 'player', profile: BOXERS.player, events: this.events });
     this.difficulty = DIFFICULTIES[settings.get('difficulty')] || DIFFICULTIES.intermediate;
-    this.opponent = new Opponent({ id: 'opponent', profile: BOXERS[this.difficulty.opponent], events: this.events });
+    this.opponent = new Opponent({ id: 'opponent', profile: opponentFor(settings.get('opponent'), this.difficulty), events: this.events });
     this.combat = new CombatSystem(this.events);
     this.combat.setFighters(this.player, this.opponent);
     this.rounds = new RoundSystem(this.events);
-    this.ai = new AI(this.opponent, this.difficulty, this.events);
+    this.ai = new AI(this.opponent, buildAIProfile(this.difficulty, this.opponent.profile), this.events);
     this.opponentModel = createBoxerModel(this.opponent.profile);
     this.scene.add(this.opponentModel.root);
+    this.referee = new Referee();
+    this.scene.add(this.referee.root);
+    this.referee.ready.then(() => this.applyQualityToModel());
     this.arms = new FirstPersonArms(this.camera, { gloveSkin: BOXERS.player.gloves, skinColor: BOXERS.player.look.skin });
     this._buildPlayerShadow();
 
@@ -130,6 +138,7 @@ export class Game {
       onSound: sound,
     });
     this.results = new ResultScreen(uiRoot, { onReplay: () => this.startMatch(), onMenu: () => this.quitToMenu(), onSound: sound });
+    this.padNav = new PadNav(uiRoot, { onBack: () => this._padBack() });
     this.hud.onLockHintClick(() => this.resume());
 
     this._bindEvents();
@@ -195,6 +204,7 @@ export class Game {
     this.cameraRig.setMode('orbit');
     this.cameraRig.resetEffects();
     this.arms.setVisible(false);
+    this.referee.setVisible(false);
     this.playerShadow.visible = false;
     this.hud.hide();
     this.pauseMenu.hide();
@@ -246,6 +256,8 @@ export class Game {
     this.matchActive = true;
     this.cameraRig.setMode('fight', { transition: prev === 'menu' || prev === 'results' });
     this.arms.setVisible(true);
+    this.referee.setVisible(true);
+    this.referee.resetPosition();
     this.playerShadow.visible = true;
     this.hud.setFighters(this.player, this.opponent, { opponentSub: `« ${this.opponent.profile.nickname} » · ${this.difficulty.label}` });
     this.hud.show();
@@ -269,6 +281,11 @@ export class Game {
     const ok = await this.input.requestPointerLock();
     if (ok) {
       this.lockFailures = 0;
+      this.hud.setLockHint(false);
+      return true;
+    }
+    // À la manette, pas besoin de la souris : le combat se joue sans verrouillage
+    if (this.input.padActive) {
       this.hud.setLockHint(false);
       return true;
     }
@@ -330,11 +347,12 @@ export class Game {
 
   _setDifficulty(id) {
     const diff = DIFFICULTIES[id] || DIFFICULTIES.intermediate;
-    const changed = diff !== this.difficulty || this.opponent.profile.id !== diff.opponent;
+    const boxer = opponentFor(this.settings.get('opponent'), diff);
+    const changed = this.opponent.profile !== boxer;
     this.difficulty = diff;
-    this.ai.setProfile(diff);
+    this.ai.setProfile(buildAIProfile(diff, boxer));
     if (changed) {
-      this.opponent.setProfile(BOXERS[diff.opponent]);
+      this.opponent.setProfile(boxer);
       this.opponentModel.dispose();
       this.opponentModel = createBoxerModel(this.opponent.profile);
       this.scene.add(this.opponentModel.root);
@@ -347,7 +365,7 @@ export class Game {
    * ================================================================ */
 
   _onSetting(key) {
-    if (key === 'difficulty' && this.state === 'menu') this._setDifficulty(this.settings.get('difficulty'));
+    if ((key === 'difficulty' || key === 'opponent') && this.state === 'menu') this._setDifficulty(this.settings.get('difficulty'));
     this.applySettings(key === 'quality');
   }
 
@@ -370,9 +388,15 @@ export class Game {
 
   applyQualityToModel() {
     const shadows = (GameConfig.quality[this.settings.get('quality')] || {}).shadows;
-    this.opponentModel.root.traverse((o) => {
+    const apply = (root) => root.traverse((o) => {
       if (o.isMesh) o.castShadow = !!shadows;
     });
+    // Les personnages se chargent en arrière-plan : on règle aussi ce qui arrive après
+    for (const m of [this.opponentModel, this.referee]) {
+      if (!m) continue;
+      apply(m.root);
+      if (m.ready) m.ready.then(() => apply(m.root));
+    }
   }
 
   resize() {
@@ -416,11 +440,50 @@ export class Game {
         this.settings.set('showControls', !this.settings.get('showControls'));
       }
     });
+    // Manette : Start = pause / reprise, Back = aide, menus parcourus à la croix
+    this.input.onPad((code) => this._onPad(code));
     // Clic sur le canvas pendant le combat sans verrouillage : on (re)verrouille
     this.canvas.addEventListener('click', () => {
       if (this.state === 'fight' && !this.input.locked && !this.quitOpen) this.input.requestPointerLock();
       else if (this.state === 'paused' && !this.pauseMenu.visible) this.resume();
     });
+  }
+
+  _onPad(code) {
+    if (code === 'Pad9') {
+      if (this.state === 'fight' && this.online && this.quitOpen) this.resume();
+      else if (this.state === 'fight') this.pause();
+      else if (this.state === 'paused' && this.pauseMenu.optionsOpen) this.pauseMenu.back();
+      else if (this.state === 'paused') this.resume();
+      else this.padNav.handle('Pad0');
+      return;
+    }
+    if (code === 'Pad8' && this.state === 'fight' && !this.quitOpen) {
+      this.settings.set('showControls', !this.settings.get('showControls'));
+      return;
+    }
+    // Pendant le combat, les boutons servent à boxer (sauf dialogue « quitter » en ligne)
+    if (this.state === 'fight' && !this.quitOpen) return;
+    this.padNav.handle(code);
+  }
+
+  /** Bouton B dans les menus. */
+  _padBack() {
+    if (this.state === 'paused') {
+      if (this.pauseMenu.optionsOpen) this.pauseMenu.back();
+      else this.resume();
+      return true;
+    }
+    if (this.state === 'fight' && this.quitOpen) {
+      this.resume();
+      return true;
+    }
+    if (this.state === 'menu' && this.menu.panel !== 'poster') {
+      this.menu.showPanel('poster');
+      this.padNav.reset();
+      return true;
+    }
+    return false;
   }
 
   /* ================================================================
@@ -573,14 +636,63 @@ export class Game {
       }
     });
 
-    ev.on('fighter:ko', ({ fighter }) => {
+    // --- Knockdown : l'arbitre compte ---
+    ev.on('fighter:down', ({ fighter, knockdowns }) => {
       if (!inFight()) return;
-      // En ligne, la simulation enregistre le KO elle-même (net/OnlineWorld.js) et le temps ne ralentit pas
+      // En ligne, la simulation gère le compte elle-même (net/OnlineWorld.js) et le temps ne ralentit pas
       if (!this.online) {
-        this.rounds.registerKO(fighter);
-        this.slowMo = { time: 1.6, scale: 0.28 };
+        this.rounds.registerKnockdown(fighter);
+        this.slowMo = { time: 1.1, scale: 0.32 };
       }
-      this.cameraRig.addTrauma(0.8);
+      const me = fighter === this.player;
+      this.cameraRig.addTrauma(0.7);
+      this.arena.audience.cheer(0.9);
+      this.arena.lighting.burst(1);
+      this.audio.play('crowd_cheer', { volume: 1, minGap: 0.1 });
+      this.screenFx.setBars(true);
+      if (me) {
+        this.screenFx.setFade(0.35);
+        this.audio.muffleFor(1, 1.6);
+      }
+      if (this.rounds.phase === 'count') {
+        const who = me ? 'Vous êtes' : `${fighter.name.split(' ')[0]} est`;
+        this.roundOverlay.knockdown('AU TAPIS !', knockdowns > 1 ? `${knockdowns}e knockdown` : `${who} au tapis`);
+      }
+    });
+
+    ev.on('count:tick', ({ fighter, n }) => {
+      if (!inFight()) return;
+      this.audio.play('count', { volume: 0.9, minGap: 0 });
+      if (n <= 10) this.audio.say(COUNT_WORDS[n - 1]);
+      this.arena.audience.cheer(fighter === this.player ? 0.12 : 0.22);
+      this.hud.countPulse();
+    });
+
+    ev.on('count:up', ({ fighter }) => {
+      if (!inFight()) return;
+      const me = fighter === this.player;
+      this.audio.play('crowd_cheer', { volume: 0.8, minGap: 0.3 });
+      this.arena.audience.cheer(0.5);
+      this._msg('rise', me ? 'Debout ! Tenez bon' : `${fighter.name.split(' ')[0]} se relève`, me ? 'good' : 'bad', 0.5);
+      if (me) {
+        this.screenFx.setFade(0);
+        this.audio.muffleFor(0.5, 0.8);
+      }
+    });
+
+    ev.on('count:end', () => {
+      if (!inFight()) return;
+      this.screenFx.setBars(false);
+      this.screenFx.setFade(0);
+      this.audio.play('bell', { minGap: 0 });
+      this.roundOverlay.resume('BOX !');
+    });
+
+    ev.on('fighter:ko', ({ fighter, kind }) => {
+      if (!inFight()) return;
+      const technical = kind === 'KO technique';
+      if (!this.online && technical) this.slowMo = { time: 1.6, scale: 0.28 };
+      this.cameraRig.addTrauma(technical ? 0.8 : 0.3);
       this.arena.audience.cheer(1);
       this.arena.audience.setBaseExcitement(0.9);
       this.arena.lighting.burst(1.4);
@@ -594,8 +706,8 @@ export class Game {
         this.cameraRig.zoomTarget = 0.6;
       }
       setTimeout(() => {
-        if (this.state === 'fight' || this.state === 'paused') this.roundOverlay.ko('KNOCKOUT');
-      }, 650);
+        if (this.state === 'fight' || this.state === 'paused') this.roundOverlay.ko(technical ? 'KO TECHNIQUE' : 'KNOCKOUT', technical ? 'Trois knockdowns dans le round' : 'Compté dix');
+      }, technical ? 650 : 250);
     });
 
     ev.on('round:intro', ({ round, total }) => {
@@ -745,6 +857,8 @@ export class Game {
     this.matchActive = true;
     this.cameraRig.setMode('fight', { transition: prev === 'menu' || prev === 'results' });
     this.arms.setVisible(true);
+    this.referee.setVisible(true);
+    this.referee.resetPosition();
     this.playerShadow.visible = true;
     this.hud.setFighters(p, o, { opponentSub: 'En ligne' });
     this.hud.show();
@@ -754,7 +868,7 @@ export class Game {
     // Le combat démarre souvent sans clic (message réseau) : le navigateur peut refuser
     // de verrouiller la souris tout de suite → invite « Cliquez », le combat ne s'arrête pas.
     this.input.requestPointerLock().then((ok) => {
-      if (this.online && !ok && !this.input.fallbackMode) this.hud.setLockHint(true, 'Cliquez pour prendre la souris');
+      if (this.online && !ok && !this.input.fallbackMode && !this.input.padActive) this.hud.setLockHint(true, 'Cliquez pour prendre la souris');
     });
     return world;
   }
@@ -970,6 +1084,7 @@ export class Game {
 
   update(realDt) {
     this.time += realDt;
+    this.input.pollGamepads(realDt);
     if (this.state === 'paused') return;
 
     // Temps de jeu : gel d'image et ralenti
@@ -1043,6 +1158,7 @@ export class Game {
     const victory = r.phase === 'ko' || r.phase === 'over';
     this.opponentModel.update(dt, o, { victory: victory && p.ko && p.koTime > 1.2, camera: p.eye });
     this.arms.update(dt, realDt, p, { victory: victory && o.ko && o.koTime > 1 });
+    this.referee.update(dt, { phase: r.phase, count: r.count, fighters: [p, o], result: r.result });
     this.cameraRig.update(realDt, p, o);
     this.effects.update(dt);
     this.arena.update(dt, this.camera.position, o.position, [p, o]);
@@ -1056,6 +1172,8 @@ export class Game {
       total: r.totalRounds,
       timeLeft: r.phase === 'intro' ? r.roundDuration : r.timeLeft,
       phase: r.phase,
+      count: r.count,
+      pad: !!this.input.padActive,
       score: p.matchStats.score,
       fps: this.settings.get('showFps') ? this.fps.value : null,
       showControls: this.settings.get('showControls'),
@@ -1081,6 +1199,7 @@ export class Game {
     p.update(dt);
     o.update(dt);
     this.opponentModel.update(dt, o, { victory: p.ko });
+    this.referee.update(dt, { phase: this.rounds.phase, count: null, fighters: [p, o], result: this.rounds.result });
     this.cameraRig.update(dt, p, o);
     this.effects.update(dt);
     this.arena.update(dt, this.camera.position, o.position, [p, o]);
@@ -1127,6 +1246,7 @@ export class Game {
     this.arena.dispose();
     this.effects.dispose();
     this.opponentModel.dispose();
+    this.referee.dispose();
     this.arms.dispose();
     this.renderer.dispose();
     this.events.clear();

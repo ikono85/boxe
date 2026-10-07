@@ -15,6 +15,7 @@ import { EventBus } from '../src/core/EventBus.js';
 import { setSeed, random, range, chance, pick } from '../src/core/Random.js';
 import { BOXERS } from '../src/config/Boxers.js';
 import { DIFFICULTIES } from '../src/config/Difficulty.js';
+import { buildAIProfile } from '../src/config/Styles.js';
 import { GameConfig } from '../src/config/GameConfig.js';
 import { PUNCHES } from '../src/config/Punches.js';
 import { Player } from '../src/game/Player.js';
@@ -156,31 +157,37 @@ class PlayerBot {
 /* 3. Combat complet                                                   */
 /* ------------------------------------------------------------------ */
 
-function runFight({ playerMode, aDiff, bDiff, seed }) {
+function runFight({ playerMode, aDiff, bDiff, bBoxer, aBoxer, seed }) {
   setSeed(seed);
   const events = new EventBus();
   let a;
   let ctrlA;
   if (playerMode === 'bot') {
     a = new Player({ id: 'player', profile: BOXERS.player, events });
+    a.autoRise = true; // le robot ne martèle pas : il se relève comme l'IA
     ctrlA = new PlayerBot(a, 0.55);
   } else {
-    a = new Opponent({ id: 'player', profile: BOXERS[DIFFICULTIES[aDiff].opponent], events });
+    a = new Opponent({ id: 'player', profile: BOXERS[aBoxer || DIFFICULTIES[aDiff].opponent], events });
   }
-  const bProfile = DIFFICULTIES[bDiff];
-  const b = new Opponent({ id: 'opponent', profile: BOXERS[bProfile.opponent], events });
+  const bBox = BOXERS[bBoxer || DIFFICULTIES[bDiff].opponent];
+  const bProfile = buildAIProfile(DIFFICULTIES[bDiff], bBox);
+  const b = new Opponent({ id: 'opponent', profile: bBox, events });
   const combat = new CombatSystem(events);
   combat.setFighters(a, b);
   const rounds = new RoundSystem(events);
   rounds.configure({ rounds: 3, roundDuration: 60, breakDuration: 2 });
   const aiB = new AI(b, bProfile, events);
-  if (playerMode !== 'bot') ctrlA = new AI(a, DIFFICULTIES[aDiff], events);
+  if (playerMode !== 'bot') ctrlA = new AI(a, buildAIProfile(DIFFICULTIES[aDiff], a.profile), events);
 
   let result = null;
   let errors = 0;
-  const counts = { stuns: 0, crits: 0, combos: 0, guardBreaks: 0, dodgesA: 0, dodgesB: 0 };
+  const counts = { stuns: 0, crits: 0, combos: 0, guardBreaks: 0, dodgesA: 0, dodgesB: 0, downs: 0, rises: 0 };
   events.on('match:end', (r) => (result = r));
-  events.on('fighter:ko', ({ fighter }) => rounds.registerKO(fighter));
+  events.on('fighter:down', ({ fighter }) => {
+    counts.downs++;
+    rounds.registerKnockdown(fighter);
+  });
+  events.on('fighter:up', () => counts.rises++);
   events.on('fighter:stunned', () => counts.stuns++);
   events.on('punch:land', (e) => { if (e.crit) counts.crits++; });
   events.on('combo', () => counts.combos++);
@@ -230,6 +237,9 @@ function matchup(label, opts, n) {
   let winsB = 0;
   let draws = 0;
   let kos = 0;
+  let tkos = 0;
+  let downs = 0;
+  let rises = 0;
   let koRoundSum = 0;
   let errors = 0;
   const agg = { aThrown: 0, aLanded: 0, bThrown: 0, bLanded: 0, aDmg: 0, bDmg: 0, stuns: 0, crits: 0, combos: 0, gb: 0, dodA: 0, dodB: 0, blocksA: 0, blocksB: 0 };
@@ -242,8 +252,11 @@ function matchup(label, opts, n) {
     else draws++;
     if (result.method === 'KO') {
       kos++;
+      if (result.kind === 'KO technique') tkos++;
       koRoundSum += result.round;
     }
+    downs += counts.downs;
+    rises += counts.rises;
     agg.aThrown += a.matchStats.thrown;
     agg.aLanded += a.matchStats.landed;
     agg.bThrown += b.matchStats.thrown;
@@ -261,7 +274,7 @@ function matchup(label, opts, n) {
   }
   const f = (x) => (x / n).toFixed(1);
   console.log(
-    `${label.padEnd(26)} A:${String(winsA).padStart(3)}  B:${String(winsB).padStart(3)}  nul:${String(draws).padStart(2)}  KO:${String(kos).padStart(3)} (round moy. ${kos ? (koRoundSum / kos).toFixed(1) : '-'})` +
+    `${label.padEnd(26)} A:${String(winsA).padStart(3)}  B:${String(winsB).padStart(3)}  nul:${String(draws).padStart(2)}  KO:${String(kos).padStart(3)} (dont ${tkos} tech., round moy. ${kos ? (koRoundSum / kos).toFixed(1) : '-'})  tapis ${f(downs)} relevés ${f(rises)}` +
       `  | A ${f(agg.aLanded)}/${f(agg.aThrown)} coups, ${f(agg.aDmg)} dmg, ${f(agg.blocksA)} blocs, ${f(agg.dodA)} esq.` +
       `  | B ${f(agg.bLanded)}/${f(agg.bThrown)} coups, ${f(agg.bDmg)} dmg, ${f(agg.blocksB)} blocs, ${f(agg.dodB)} esq.` +
       `  | stun ${f(agg.stuns)} crit ${f(agg.crits)} combo ${f(agg.combos)} brisGarde ${f(agg.gb)}` +
@@ -282,3 +295,11 @@ matchup('Équilibré vs Équilibré', { playerMode: 'ai', aDiff: 'intermediate',
 matchup('Équilibré vs Débutant', { playerMode: 'ai', aDiff: 'intermediate', bDiff: 'beginner' }, n);
 matchup('Expert vs Équilibré', { playerMode: 'ai', aDiff: 'expert', bDiff: 'intermediate' }, n);
 matchup('Expert vs Débutant', { playerMode: 'ai', aDiff: 'expert', bDiff: 'beginner' }, n);
+
+console.log(`\n=== Styles (niveau Équilibré) ===`);
+for (const id of ['tempest', 'bulldozer', 'eel', 'gatling', 'sniper']) {
+  matchup(`Robot vs ${BOXERS[id].nickname}`, { playerMode: 'bot', bDiff: 'intermediate', bBoxer: id }, n);
+}
+for (const [x, y] of [['bulldozer', 'eel'], ['gatling', 'sniper'], ['bulldozer', 'sniper'], ['eel', 'gatling']]) {
+  matchup(`${BOXERS[x].nickname} vs ${BOXERS[y].nickname}`, { playerMode: 'ai', aDiff: 'intermediate', aBoxer: x, bDiff: 'intermediate', bBoxer: y }, n);
+}

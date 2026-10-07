@@ -6,17 +6,22 @@
  *   intro (carton ROUND X + FIGHT !) → fighting (chrono) → roundEnd (cloche)
  *     → break (minute de repos, récupération partielle) → intro du round suivant
  *   …après le dernier round : décision des trois juges (système des 10 points).
- *   KO à tout moment : séquence 'ko' puis fin du match.
+ *   Knockdown (vie à zéro) : compte de l'arbitre ('count', chrono arrêté).
+ *   Relevé avant 10 → compte obligatoire jusqu'à 8 puis reprise ; sinon KO.
+ *   Trois knockdowns dans le même round : KO technique.
+ *   KO : séquence 'ko' puis fin du match.
  *
  * Les juges notent chaque round 10-9 (10-8 si domination nette, 10-10 si
  * égalité) à partir des coups propres, des coups puissants et des dégâts.
+ * Chaque knockdown coûte un point de plus à celui qui est allé au tapis (10-8).
  * Chaque juge a sa propre sensibilité : les décisions partagées existent.
  */
 
-import { GameConfig } from '../config/GameConfig.js';
+import { GameConfig, ringBound } from '../config/GameConfig.js';
 import { range } from '../core/Random.js';
 
 const MC = GameConfig.match;
+const KD = GameConfig.knockdown;
 
 export class RoundSystem {
   constructor(events) {
@@ -34,6 +39,8 @@ export class RoundSystem {
     this.judges = [];
     this.scorecards = [];
     this.elapsedFight = 0;
+    this.count = null; // compte en cours { fighter, other, n, timer, up }
+    this.kd = []; // knockdowns par round : [boxeur 0, boxeur 1]
   }
 
   configure({ rounds, roundDuration, breakDuration } = {}) {
@@ -48,6 +55,8 @@ export class RoundSystem {
     this.round = 1;
     this.result = null;
     this.elapsedFight = 0;
+    this.count = null;
+    this.kd = [];
     // Trois juges, chacun avec sa sensibilité aux coups puissants et au volume
     this.judges = [0, 1, 2].map(() => ({ power: range(0.8, 1.25), volume: range(0.85, 1.15), damage: range(0.85, 1.2) }));
     this.scorecards = this.judges.map(() => []);
@@ -107,6 +116,10 @@ export class RoundSystem {
         }
         break;
 
+      case 'count':
+        this._updateCount(dt);
+        break;
+
       case 'ko':
         this.timer -= dt;
         if (this.timer <= 0) {
@@ -125,14 +138,92 @@ export class RoundSystem {
     if (this.phase === 'break' && this.breakDuration - this.timer > 1.5) this.timer = 0;
   }
 
-  /** Appelé par le jeu quand un boxeur est KO. */
-  registerKO(loser) {
+  /** Appelé par le jeu quand un boxeur va au tapis : l'arbitre compte. */
+  registerKnockdown(fighter) {
+    if (this.phase === 'ko' || this.phase === 'over' || this.phase === 'count') return;
+    const idx = this.fighters.indexOf(fighter);
+    const other = this.fighters[1 - idx];
+    const kd = this.kd[this.roundIndex] || (this.kd[this.roundIndex] = [0, 0]);
+    kd[idx]++;
+    if (kd[idx] >= KD.maxPerRound) {
+      this.registerKO(fighter, 'KO technique');
+      return;
+    }
+    this.phase = 'count';
+    this.count = { fighter, other, n: 0, timer: KD.countDelay, up: false, upAt: 0 };
+    // L'autre boxeur recule (coin neutre), sans sortir du ring
+    let dx = other.position.x - fighter.position.x;
+    let dz = other.position.z - fighter.position.z;
+    const d = Math.hypot(dx, dz);
+    if (d < 1e-3) {
+      dx = -Math.sin(other.yaw);
+      dz = -Math.cos(other.yaw);
+    } else {
+      dx /= d;
+      dz /= d;
+    }
+    const B = ringBound() - 0.45;
+    other.walkTo.set(
+      Math.max(-B, Math.min(B, fighter.position.x + dx * KD.standAway)),
+      0,
+      Math.max(-B, Math.min(B, fighter.position.z + dz * KD.standAway)),
+    );
+    other.walking = true;
+    this.events.emit('count:start', { fighter, other, knockdowns: fighter.knockdowns });
+  }
+
+  _updateCount(dt) {
+    const c = this.count;
+    const f = c.fighter;
+    c.timer -= dt;
+    if (!c.up) {
+      if (c.timer <= 0) {
+        c.n++;
+        c.timer += KD.interval;
+        f.down.counting = true;
+        if (c.n >= 10) {
+          this.events.emit('count:tick', { fighter: f, n: c.n });
+          this.registerKO(f, 'KO');
+          return;
+        }
+        this.events.emit('count:tick', { fighter: f, n: c.n });
+      }
+      const rises = f.autoRise ? c.n >= f.down.riseAt : f.down.meter >= f.down.need;
+      if (c.n >= KD.minRiseCount && rises) {
+        f.getUp();
+        c.up = true;
+        c.upAt = c.n;
+        c.timer = Math.min(c.timer, KD.fastInterval);
+        this.events.emit('count:up', { fighter: f, n: c.n });
+      }
+      return;
+    }
+    // Relevé : compte obligatoire jusqu'à 8, puis reprise quand il est debout
+    if (c.timer > 0) return;
+    if (c.n < KD.mandatory) {
+      c.n++;
+      c.timer = KD.fastInterval;
+      this.events.emit('count:tick', { fighter: f, n: c.n });
+      return;
+    }
+    if (f.down.riseT < KD.riseDuration) return;
+    this.phase = 'fighting';
+    this.count = null;
+    c.other.walking = false;
+    this.events.emit('count:end', { fighter: f, other: c.other });
+  }
+
+  /** KO définitif (compte de 10, KO technique). */
+  registerKO(loser, kind = 'KO') {
     if (this.phase === 'ko' || this.phase === 'over') return;
     const winner = this.fighters.find((f) => f !== loser);
+    if (this.count) this.count.other.walking = false;
+    this.count = null;
     this.phase = 'ko';
-    this.timer = MC.koSequenceDuration;
+    this.timer = kind === 'KO technique' ? MC.koSequenceDuration : MC.koSequenceDuration * 0.7;
     this.result = {
       method: 'KO',
+      kind,
       winner,
       loser,
       round: this.round,
@@ -143,6 +234,7 @@ export class RoundSystem {
       totals: this._totals(),
     };
     this.events.emit('match:ko', this.result);
+    this.events.emit('fighter:ko', { fighter: loser, kind });
   }
 
   _enterIntro() {
@@ -173,6 +265,11 @@ export class RoundSystem {
       if (Math.abs(diff) < total * 0.06 + 0.8) card = [10, 10];
       else if (diff > 0) card = diff > total * 0.45 && ra.damage - rb.damage > 22 ? [10, 8] : [10, 9];
       else card = -diff > total * 0.45 && rb.damage - ra.damage > 22 ? [8, 10] : [9, 10];
+      // Knockdowns : le round va à celui qui est resté debout, un point de moins par knockdown
+      const kd = this.kd[this.roundIndex] || [0, 0];
+      const net = kd[1] - kd[0];
+      if (net > 0) card = [10, Math.max(6, 9 - net)];
+      else if (net < 0) card = [Math.max(6, 9 + net), 10];
       this.scorecards[i].push(card);
     });
   }

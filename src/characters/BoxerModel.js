@@ -26,6 +26,7 @@ import { GameConfig } from '../config/GameConfig.js';
 import { clamp, lerp, Ease, Spring, worldToLocal } from '../core/MathUtils.js';
 
 const ST = GameConfig.stance;
+const RISE = GameConfig.knockdown.riseDuration;
 const PELVIS_Y = 0.9;
 const SPINE_Y = 0.06;
 const TORSO_TO_HEAD = 0.66; // distance taille → centre de la tête
@@ -292,8 +293,13 @@ export class BoxerModel {
     this.celebrate += ((state.victory ? 1 : 0) - this.celebrate) * Math.min(1, dt * 3);
 
     // --- KO : chute ---
-    const ko = f.ko;
-    const koT = ko ? f.koTime : 0;
+    let ko = f.ko;
+    let koT = ko ? f.koTime : 0;
+    // Relevé après un knockdown : la chute rejouée à l'envers
+    if (!ko && f.down && f.down.riseT < RISE) {
+      ko = true;
+      koT = 0.95 * (1 - f.down.riseT / RISE);
+    }
     const buckle = ko ? Ease.outQuad(clamp(koT / 0.35, 0, 1)) : 0;
     const fallT = ko ? clamp((koT - 0.18) / 0.75, 0, 1) : 0;
     let fallAngle = ko ? Math.pow(fallT, 2.2) * (Math.PI / 2) * 0.96 : 0;

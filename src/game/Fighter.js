@@ -15,6 +15,7 @@ import { GameConfig, ringBound } from '../config/GameConfig.js';
 import { StaminaSystem } from '../combat/StaminaSystem.js';
 import { PunchSystem } from '../combat/PunchSystem.js';
 import { FighterStats } from './MatchStats.js';
+import { random } from '../core/Random.js';
 import { clamp, damp, Ease, localToWorld, forwardFromYaw, rightFromYaw } from '../core/MathUtils.js';
 
 const FC = GameConfig.fighter;
@@ -22,6 +23,7 @@ const DC = GameConfig.dodge;
 const SC = GameConfig.stun;
 const CC = GameConfig.combat;
 const RC = GameConfig.ring;
+const KD = GameConfig.knockdown;
 
 const _fwd = new Vector3();
 const _right = new Vector3();
@@ -60,6 +62,13 @@ export class Fighter {
     this.ko = false;
     this.koTime = 0;
     this.koDir = new Vector3(0, 0, 1);
+    // Knockdown : compte de l'arbitre, relevé (voir RoundSystem)
+    this.knockdowns = 0;
+    this.down = { counting: false, meter: 0, need: 0, riseAt: 0, riseT: 10 };
+    this.autoRise = !isPlayer; // l'IA décide seule ; le joueur martèle ses coups
+    // Déplacement automatique (vers le coin neutre pendant un compte)
+    this.walkTo = new Vector3();
+    this.walking = false;
     this.time = 0;
     this.opponent = null;
     this.currentRound = 0; // index du round en cours (statistiques)
@@ -109,6 +118,9 @@ export class Fighter {
     this.lastWhiffTime = -10;
     this.ko = false;
     this.koTime = 0;
+    this.knockdowns = 0;
+    Object.assign(this.down, { counting: false, meter: 0, need: 0, riseAt: 0, riseT: 10 });
+    this.walking = false;
     this.headOffset.set(0, 0, 0);
     this.bodyOffset.set(0, 0, 0);
     this.roll = 0;
@@ -132,6 +144,7 @@ export class Fighter {
     this.stun.timer = 0;
     this.stun.meter = 0;
     this.flinchTimer = 0;
+    this.walking = false;
     this.headOffset.set(0, 0, 0);
     this.bodyOffset.set(0, 0, 0);
     this.roll = 0;
@@ -220,6 +233,7 @@ export class Fighter {
 
   update(dt) {
     this.time += dt;
+    if (this.down.riseT < 10) this.down.riseT += dt;
 
     if (this.ko) {
       this.koTime += dt;
@@ -329,6 +343,22 @@ export class Fighter {
   _updateMovement(dt) {
     let mx = this.frozen ? 0 : this.moveInput.x;
     let mz = this.frozen ? 0 : this.moveInput.z;
+    if (this.walking) {
+      // Marche imposée (coin neutre) : direction monde → repère local
+      const dx = this.walkTo.x - this.position.x;
+      const dz = this.walkTo.z - this.position.z;
+      const d = Math.hypot(dx, dz);
+      if (d < 0.06) {
+        mx = 0;
+        mz = 0;
+      } else {
+        forwardFromYaw(this.yaw, _fwd);
+        rightFromYaw(this.yaw, _right);
+        const k = Math.min(1, d * 2.2) / d;
+        mx = (dx * _right.x + dz * _right.z) * k;
+        mz = (dx * _fwd.x + dz * _fwd.z) * k;
+      }
+    }
     const len = Math.hypot(mx, mz);
     if (len > 1) {
       mx /= len;
@@ -471,6 +501,10 @@ export class Fighter {
     }
   }
 
+  /**
+   * Au tapis (vie à zéro). L'arbitre compte (RoundSystem) : le boxeur se
+   * relève, ou c'est le KO. Le KO définitif est décidé par le RoundSystem.
+   */
   knockOut(dir) {
     this.ko = true;
     this.hp = 0;
@@ -482,7 +516,44 @@ export class Fighter {
     this.guard.intent = false;
     this.dodge.phase = 'none';
     this.knockVel.addScaledVector(this.koDir, 1.2);
-    if (this.events) this.events.emit('fighter:ko', { fighter: this });
+
+    this.knockdowns++;
+    const i = Math.min(this.knockdowns, 3) - 1;
+    const D = this.down;
+    D.counting = false;
+    D.meter = 0;
+    D.riseT = 10;
+    D.need = KD.mashNeed[i];
+    // Relevé automatique (IA) : à quel compte, ou pas du tout (tirage commun aux deux joueurs en ligne)
+    const chin = this.stats.chin || 1;
+    const stay = [0.06, 0.25, 0.55][i] / chin;
+    const r1 = random();
+    const r2 = random();
+    D.riseAt = r1 < stay ? 99 : Math.min(9, Math.round(2 + i * 1.6 + r2 * 3.5));
+    this.matchStats.downs++;
+    this.matchStats.round(this.currentRound).downs++;
+    if (this.events) this.events.emit('fighter:down', { fighter: this, knockdowns: this.knockdowns });
+  }
+
+  /** Se relève après un knockdown (appelé par le RoundSystem pendant le compte). */
+  getUp() {
+    if (!this.ko) return;
+    const i = Math.min(this.knockdowns, 3) - 1;
+    const chin = this.stats.chin || 1;
+    this.ko = false;
+    this.koTime = 0;
+    this.down.counting = false;
+    this.down.meter = 0;
+    this.down.riseT = 0;
+    this.hp = Math.min(this.maxHp, Math.max(1, Math.round(this.maxHp * KD.hpAfter[i] * Math.min(1.15, Math.sqrt(chin)))));
+    if (this.stamina.ratio < 0.5) this.stamina.recover(0.5);
+    Object.assign(this.stun, { meter: 0, timer: 0, idle: 0, immunity: 4 });
+    this.flinchTimer = 0;
+    this.knockVel.set(0, 0, 0);
+    this.velocity.set(0, 0, 0);
+    this.guard.brokenTimer = 0;
+    this.punches.reset();
+    if (this.events) this.events.emit('fighter:up', { fighter: this });
   }
 
   /* ================================================================

@@ -150,6 +150,31 @@ export class AudioManager {
     return src;
   }
 
+  /**
+   * Voix de l'arbitre (synthèse vocale du navigateur, en français).
+   * Silencieuse si le navigateur ne la propose pas ou si le son est coupé.
+   */
+  say(text) {
+    try {
+      const synth = typeof window !== 'undefined' && window.speechSynthesis;
+      if (!synth || !this.ctx || this.volumes.master <= 0.01) return;
+      synth.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'fr-FR';
+      u.rate = 1.15;
+      u.pitch = 0.8;
+      u.volume = Math.min(1, this.volumes.master * this.volumes.sfx * 1.1);
+      if (!this.voice) {
+        const voices = synth.getVoices();
+        this.voice = voices.find((v) => /^fr/i.test(v.lang)) || null;
+      }
+      if (this.voice) u.voice = this.voice;
+      synth.speak(u);
+    } catch {
+      /* pas de voix : le chiffre reste affiché */
+    }
+  }
+
   /** Coup reçu violent : le son s'étouffe un instant. */
   muffleFor(amount = 1, duration = 0.6) {
     if (!this.ctx) return;

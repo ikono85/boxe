@@ -35,7 +35,7 @@ export class ResultScreen {
     if (draw) verdict = 'Personne ne gagne ce soir';
     else verdict = won ? 'Victoire' : `Victoire de ${opponent.name}`;
     const method = isKO
-      ? `KO au round ${r.round} à ${clock(r.time)}`
+      ? `${r.kind === 'KO technique' ? 'KO technique' : 'KO'} au round ${r.round} à ${clock(r.time)}`
       : `${r.kind} après ${r.round} round${r.round > 1 ? 's' : ''}`;
 
     const ps = player.matchStats;
@@ -43,6 +43,7 @@ export class ResultScreen {
     const rows = [
       [ps.landed, 'Coups portés', os.landed],
       [pct(ps.accuracy), 'Précision', pct(os.accuracy)],
+      [ps.downs, 'Au tapis', os.downs],
       [ps.power, 'Coups puissants', os.power],
       [`${ps.head} / ${ps.body}`, 'Tête / corps', `${os.head} / ${os.body}`],
       [ps.crits, 'Critiques', os.crits],

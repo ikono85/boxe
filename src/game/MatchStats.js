@@ -26,6 +26,7 @@ export class FighterStats {
     this.combos = 0;
     this.bestCombo = null;
     this.stuns = 0; // étourdissements infligés
+    this.downs = 0; // knockdowns subis
     this.score = 0;
     this.byType = { jab: 0, cross: 0, hookL: 0, hookR: 0, upperL: 0, upperR: 0 };
     this.thrownByType = { jab: 0, cross: 0, hookL: 0, hookR: 0, upperL: 0, upperR: 0 };
@@ -34,7 +35,7 @@ export class FighterStats {
 
   round(index) {
     while (this.rounds.length <= index) {
-      this.rounds.push({ thrown: 0, landed: 0, power: 0, damage: 0, blocks: 0, dodges: 0 });
+      this.rounds.push({ thrown: 0, landed: 0, power: 0, damage: 0, blocks: 0, dodges: 0, downs: 0 });
     }
     return this.rounds[index];
   }

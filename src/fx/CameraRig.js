@@ -14,6 +14,7 @@ import { Vector3, Quaternion, Euler } from 'three';
 import { GameConfig } from '../config/GameConfig.js';
 import { Spring, clamp, Ease, lerp } from '../core/MathUtils.js';
 
+const RISE = GameConfig.knockdown.riseDuration;
 const _pos = new Vector3();
 const _q = new Quaternion();
 const _q2 = new Quaternion();
@@ -108,9 +109,11 @@ export class CameraRig {
       _pos.copy(player.eye);
       _q.copy(player.cameraQuat);
 
-      // Joueur KO : la caméra tombe au sol en regardant les projecteurs
-      if (player.ko) {
-        const k = Ease.inOutCubic(clamp(player.koTime / 1.15, 0, 1));
+      // Joueur au tapis : la caméra tombe au sol en regardant les projecteurs (et remonte s'il se relève)
+      let k = 0;
+      if (player.ko) k = Ease.inOutCubic(clamp(player.koTime / 1.15, 0, 1));
+      else if (player.down && player.down.riseT < RISE) k = 1 - Ease.inOutCubic(clamp(player.down.riseT / RISE, 0, 1));
+      if (k > 0) {
         _off.set(player.position.x, 0.32, player.position.z);
         _pos.lerp(_off, k);
         _e.set(lerp(player.pitch, 0.95, k), player.yaw + k * 0.3, lerp(0, 1.15, k));

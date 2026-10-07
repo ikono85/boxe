@@ -1,10 +1,13 @@
 /**
  * Input.js
  * ------------------------------------------------------------------
- * Clavier + souris + Pointer Lock.
+ * Clavier + souris + Pointer Lock + manette (Gamepad API).
  *  - état « maintenu » (isDown) et « appuyé cette frame » (pressed) par action ;
  *  - mouvements de souris accumulés entre deux frames ;
- *  - mode de secours sans Pointer Lock (souris libre + rotation aux bords).
+ *  - mode de secours sans Pointer Lock (souris libre + rotation aux bords) ;
+ *  - manette : boutons → codes 'Pad0'…'Pad15', stick gauche → 'PadUp'…,
+ *    stick droit → regard (ajouté aux mouvements de souris). Lue une fois
+ *    par image (pollGamepads) ; la dernière manette utilisée est retenue.
  */
 
 import { CONTROLS } from '../config/Controls.js';
@@ -13,6 +16,15 @@ import { CONTROLS } from '../config/Controls.js';
 // envoient un premier mouvement aberrant (saut de plusieurs centaines de pixels).
 const LOCK_GRACE_MS = 120;
 const LOCK_SKIP_MOVES = 2;
+
+// Manette : zone morte des sticks, seuils du stick gauche (avec hystérésis),
+// vitesse de rotation du stick droit (pixels de souris par seconde, à fond)
+const PAD_DEADZONE = 0.16;
+const PAD_MOVE_ON = 0.45;
+const PAD_MOVE_OFF = 0.32;
+const PAD_LOOK_X = 1250;
+const PAD_LOOK_Y = 850;
+const PAD_STICK_CODES = ['PadLeft', 'PadRight', 'PadUp', 'PadDown'];
 
 const GAME_KEYS = new Set([
   'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab',
@@ -35,6 +47,13 @@ export class Input {
     this.cursor = { x: 0.5, y: 0.5, inside: false };
     this.lockListeners = new Set();
     this.anyKeyListeners = new Set();
+    // Manette
+    this.padIndex = -1;
+    this.padPrev = []; // boutons enfoncés à l'image précédente
+    this.padStick = { PadLeft: false, PadRight: false, PadUp: false, PadDown: false };
+    this.padActive = false; // la manette est le dernier périphérique utilisé
+    this.padConnected = false;
+    this.padListeners = new Set(); // appuis de la manette (navigation dans les menus)
 
     this._onKeyDown = this._onKeyDown.bind(this);
     this._onKeyUp = this._onKeyUp.bind(this);
@@ -129,6 +148,7 @@ export class Input {
     this.pressedCodes.clear();
     this.lookX = 0;
     this.lookY = 0;
+    // (les boutons de manette encore enfoncés ne comptent plus : il faut les relâcher puis rappuyer)
   }
 
   onLockChange(fn) {
@@ -139,6 +159,99 @@ export class Input {
   onAnyKey(fn) {
     this.anyKeyListeners.add(fn);
     return () => this.anyKeyListeners.delete(fn);
+  }
+
+  /** Appuis de la manette : fn(code) avec code 'Pad0'…'Pad15' ou 'PadUp'… */
+  onPad(fn) {
+    this.padListeners.add(fn);
+    return () => this.padListeners.delete(fn);
+  }
+
+  /**
+   * Lit la manette (à appeler une fois par image, avant de lire les actions).
+   * @param {number} dt temps réel écoulé (s)
+   */
+  pollGamepads(dt) {
+    const list = typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : null;
+    let pad = null;
+    if (list) {
+      // La manette utilisée en dernier, sinon la première branchée
+      if (this.padIndex >= 0 && list[this.padIndex] && list[this.padIndex].connected) pad = list[this.padIndex];
+      for (let i = 0; i < list.length && !pad; i++) if (list[i] && list[i].connected) pad = list[i];
+    }
+    this.padConnected = !!pad;
+    if (!pad) {
+      if (this.padPrev.length || PAD_STICK_CODES.some((c) => this.padStick[c])) this._releasePad();
+      return;
+    }
+    this.padIndex = pad.index;
+    let used = false;
+
+    // Boutons
+    const n = Math.min(pad.buttons.length, 17);
+    for (let i = 0; i < n; i++) {
+      const b = pad.buttons[i];
+      const on = !!b && (b.pressed || b.value > 0.5);
+      const was = !!this.padPrev[i];
+      if (on === was) continue;
+      this.padPrev[i] = on;
+      this._padCode(`Pad${i}`, on);
+      if (on) used = true;
+    }
+
+    // Stick gauche → directions (avec hystérésis)
+    const ax = pad.axes;
+    const lx = ax[0] || 0;
+    const ly = ax[1] || 0;
+    const want = {
+      PadLeft: lx < -(this.padStick.PadLeft ? PAD_MOVE_OFF : PAD_MOVE_ON),
+      PadRight: lx > (this.padStick.PadRight ? PAD_MOVE_OFF : PAD_MOVE_ON),
+      PadUp: ly < -(this.padStick.PadUp ? PAD_MOVE_OFF : PAD_MOVE_ON),
+      PadDown: ly > (this.padStick.PadDown ? PAD_MOVE_OFF : PAD_MOVE_ON),
+    };
+    for (const c of PAD_STICK_CODES) {
+      if (want[c] === this.padStick[c]) continue;
+      this.padStick[c] = want[c];
+      this._padCode(c, want[c]);
+      if (want[c]) used = true;
+    }
+
+    // Stick droit → regard (comme la souris), courbe progressive
+    const curve = (v) => {
+      const a = Math.abs(v);
+      if (a < PAD_DEADZONE) return 0;
+      const k = (a - PAD_DEADZONE) / (1 - PAD_DEADZONE);
+      return Math.sign(v) * k * k;
+    };
+    const rx = curve(ax[2] || 0);
+    const ry = curve(ax[3] || 0);
+    if (rx || ry) {
+      used = true;
+      if (this.gameActive) {
+        this.lookX += rx * PAD_LOOK_X * dt;
+        this.lookY += ry * PAD_LOOK_Y * dt;
+      }
+    }
+    if (used) this.padActive = true;
+  }
+
+  _padCode(code, on) {
+    if (on) {
+      this.down.add(code);
+      this.pressedCodes.add(code);
+      for (const fn of this.padListeners) fn(code);
+    } else {
+      this.down.delete(code);
+    }
+  }
+
+  _releasePad() {
+    for (let i = 0; i < this.padPrev.length; i++) if (this.padPrev[i]) this.down.delete(`Pad${i}`);
+    this.padPrev = [];
+    for (const c of PAD_STICK_CODES) {
+      this.padStick[c] = false;
+      this.down.delete(c);
+    }
   }
 
   /**
@@ -197,6 +310,7 @@ export class Input {
   /* ---------- Événements DOM ---------- */
 
   _onKeyDown(e) {
+    this.padActive = false;
     for (const fn of this.anyKeyListeners) fn(e);
     if (this.gameActive && GAME_KEYS.has(e.code)) e.preventDefault();
     if (e.repeat) return;
@@ -212,6 +326,7 @@ export class Input {
     if (!this.gameActive) return;
     if (!this.locked && !this.fallbackMode) return; // le clic sert à verrouiller
     if (!this.locked && e.target !== this.element) return; // clic sur l'interface
+    this.padActive = false;
     const code = `Mouse${e.button}`;
     this.down.add(code);
     this.pressedCodes.add(code);

@@ -2,7 +2,8 @@
  * RoundOverlay.js
  * ------------------------------------------------------------------
  * Cartons plein écran : « ROUND X », « FIGHT ! », fin de round,
- * minute de repos (statistiques + conseil du coin), « KNOCKOUT ».
+ * minute de repos (statistiques + conseil du coin), « AU TAPIS ! », « BOX ! »,
+ * « KNOCKOUT ».
  */
 
 import { el, esc, pct } from './dom.js';
@@ -86,9 +87,25 @@ export class RoundOverlay {
     if (this.cd) this.cd.textContent = `${Math.max(0, Math.ceil(timeLeft))} s`;
   }
 
-  ko(text = 'KNOCKOUT') {
+  ko(text = 'KNOCKOUT', sub = '') {
     this._clear();
     this.cd = null;
-    this._show(`<div class="slam ko">${esc(text)}</div>`);
+    this._show(`<div class="slam ko">${sub ? `<small>${esc(sub)}</small>` : ''}${esc(text)}</div>`);
+  }
+
+  /** Knockdown : le carton s'efface vite pour laisser voir le compte. */
+  knockdown(text, sub = '') {
+    this._clear();
+    this.cd = null;
+    this._show(`<div class="slam down">${sub ? `<small>${esc(sub)}</small>` : ''}${esc(text)}</div>`);
+    this.timers.push(setTimeout(() => this.hide(), 1150));
+  }
+
+  /** Reprise après un compte. */
+  resume(text = 'BOX !') {
+    this._clear();
+    this.cd = null;
+    this._show(`<div class="slam fight">${esc(text)}</div>`);
+    this.timers.push(setTimeout(() => this.hide(), 1000));
   }
 }

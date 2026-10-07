@@ -253,6 +253,20 @@ button {
   max-height: calc(100vh - 3rem);
   overflow-y: auto;
 }
+.panel-h3 {
+  margin: 1.3rem 0 0.6rem;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.1rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--canvas);
+}
+/* Navigation à la manette */
+.pad-focus {
+  outline: 3px solid var(--gold) !important;
+  outline-offset: 2px;
+}
 .panel-title {
   margin: 0 0 1rem;
   font-family: var(--display);
@@ -378,6 +392,51 @@ button {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.6rem;
   margin-top: 0.35rem;
+}
+/* Choix de l'adversaire */
+.cards.roster {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.card.mini {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 0.6rem 0.75rem;
+}
+.card.mini .lvl {
+  grid-column: 1 / -1;
+  font-size: 1.05rem;
+}
+.card.mini .who {
+  text-align: left;
+  font-size: 0.85rem;
+}
+.tag {
+  align-self: center;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--line-strong);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--canvas);
+  white-space: nowrap;
+}
+.opp-detail {
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+}
+.opp-detail p {
+  margin: 0.4rem 0 0.6rem;
+  color: rgba(242, 234, 214, 0.85);
+  font-size: 0.95rem;
+}
+.opp-head .tag {
+  margin-left: 0.4rem;
+}
+.opp-detail .bars {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem;
 }
 .stat {
   font-size: 0.75rem;
@@ -1053,6 +1112,84 @@ kbd {
   -webkit-text-stroke: 3px #fff;
   animation: slamIn 0.35s cubic-bezier(0.2, 1.6, 0.4, 1) both, fadeOut 0.4s 0.55s forwards;
 }
+/* Compte de l'arbitre */
+.count-box {
+  position: absolute;
+  left: 50%;
+  top: 17%;
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: none;
+  min-width: 16rem;
+}
+.count-n {
+  font-family: var(--display);
+  font-weight: 900;
+  font-size: clamp(5rem, 15vw, 10rem);
+  line-height: 0.9;
+  color: #fff;
+  -webkit-text-stroke: 3px var(--red);
+  paint-order: stroke fill;
+  min-height: 0.9em;
+}
+.count-n.pulse {
+  animation: countPop 0.5s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+@keyframes countPop {
+  from { transform: scale(1.6); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.count-who {
+  margin-top: 0.3rem;
+  font-size: 1.05rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+.mash {
+  margin: 1.1rem auto 0;
+  width: min(22rem, 80vw);
+  padding: 0.7rem 0.9rem 0.8rem;
+  background: rgba(6, 8, 15, 0.72);
+  border: 1px solid var(--red);
+}
+.mash-title {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #fff;
+  animation: mashBlink 0.5s steps(2) infinite;
+}
+@keyframes mashBlink {
+  50% { color: var(--red); }
+}
+.mash-bar {
+  height: 10px;
+  margin: 0.5rem 0 0.4rem;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.mash-bar b {
+  display: block;
+  height: 100%;
+  background: var(--gold);
+  transform-origin: left center;
+  transform: scaleX(0);
+}
+.mash-hint {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.slam.down {
+  font-size: clamp(3.6rem, 12vw, 9rem);
+  color: #fff;
+  -webkit-text-stroke: 3px var(--red);
+  paint-order: stroke fill;
+  animation: slamIn 0.4s cubic-bezier(0.2, 1.5, 0.35, 1) both, fadeOut 0.35s 0.75s forwards;
+}
 .slam.end {
   font-size: clamp(3.2rem, 9vw, 7rem);
   animation: slamIn 0.4s cubic-bezier(0.2, 1.4, 0.4, 1) both;
@@ -1380,8 +1517,14 @@ kbd {
   .hud-bottom {
     grid-template-columns: minmax(0, 1fr) auto;
   }
-  .card .bars {
+  .card .bars,
+  .opp-detail .bars {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 420px) {
+  .cards.roster {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

@@ -1,7 +1,7 @@
 /**
  * Menu.js
  * ------------------------------------------------------------------
- * Écran d'accueil BOXING ARENA : JOUER, EN LIGNE, DIFFICULTÉ, OPTIONS, COMMANDES.
+ * Écran d'accueil BOXING ARENA : JOUER, EN LIGNE, DIFFICULTÉ, ADVERSAIRE, OPTIONS, COMMANDES.
  * Le panneau de droite affiche l'affiche du combat (« tale of the tape ») ou
  * le sous-menu choisi. La salle 3D tourne en arrière-plan.
  */
@@ -9,8 +9,9 @@
 import { el, esc, num } from './dom.js';
 import { OptionsPanel } from './OptionsPanel.js';
 import { DIFFICULTIES, DIFFICULTY_ORDER } from '../config/Difficulty.js';
-import { BOXERS } from '../config/Boxers.js';
-import { CONTROL_HELP } from '../config/Controls.js';
+import { BOXERS, OPPONENT_ORDER, opponentFor } from '../config/Boxers.js';
+import { FIGHT_STYLES } from '../config/Styles.js';
+import { CONTROL_HELP, PAD_HELP } from '../config/Controls.js';
 import { COMBOS } from '../config/Punches.js';
 
 const STAT_LABELS = [
@@ -36,11 +37,12 @@ export class Menu {
             <li><button class="menu-item primary" type="button" data-action="play">Jouer</button></li>
             <li><button class="menu-item" type="button" data-action="online">En ligne <small>1 contre 1</small></button></li>
             <li><button class="menu-item" type="button" data-action="difficulty">Difficulté <small data-id="diffLabel"></small></button></li>
+            <li><button class="menu-item" type="button" data-action="opponent">Adversaire <small data-id="oppLabel"></small></button></li>
             <li><button class="menu-item" type="button" data-action="options">Options</button></li>
             <li><button class="menu-item" type="button" data-action="controls">Commandes</button></li>
           </ul>
           <div class="menu-foot" data-id="foot"></div>
-          ${touch ? '<div class="touch-note">Ce jeu se joue au clavier et à la souris, sur ordinateur.</div>' : ''}
+          ${touch ? '<div class="touch-note">Ce jeu se joue sur ordinateur, au clavier et à la souris ou à la manette.</div>' : ''}
         </div>
         <aside class="side-panel" data-id="panel" aria-live="polite"></aside>
       </div>`);
@@ -84,6 +86,7 @@ export class Menu {
   refresh() {
     const d = DIFFICULTIES[this.settings.get('difficulty')] || DIFFICULTIES.intermediate;
     this.$.diffLabel.textContent = d.label;
+    this.$.oppLabel.textContent = this._opponentLabel();
     const best = this.settings.bestScore(d.id);
     this.$.foot.innerHTML = `<span>Format : <b>${this.settings.get('rounds')} × ${this.settings.get('roundDuration')} s</b></span>`
       + `<span>Record (${esc(d.label)}) : <b>${best ? num(best) : '—'}</b></span>`;
@@ -101,16 +104,74 @@ export class Menu {
       this.options.refresh();
       p.appendChild(this.options.el);
     } else if (name === 'difficulty') p.appendChild(this._difficultyPanel());
+    else if (name === 'opponent') p.appendChild(this._opponentPanel());
     else if (name === 'controls') p.appendChild(this._controlsPanel());
     else p.appendChild(this._posterPanel());
     this.el.querySelectorAll('.menu-item').forEach((b) => b.classList.toggle('active', b.dataset.action === name));
-    if (!silent) this.$.diffLabel.textContent = (DIFFICULTIES[this.settings.get('difficulty')] || {}).label || '';
+    if (!silent) {
+      this.$.diffLabel.textContent = (DIFFICULTIES[this.settings.get('difficulty')] || {}).label || '';
+      this.$.oppLabel.textContent = this._opponentLabel();
+    }
+  }
+
+  _opponentLabel() {
+    const choice = this.settings.get('opponent');
+    if (!BOXERS[choice]) return 'Selon le niveau';
+    return BOXERS[choice].nickname.replace(/^(Le |La |L’|L')/, '');
+  }
+
+  _bars(o) {
+    return STAT_LABELS.map(([k, label, lo, hi]) => {
+      const v = Math.max(0.08, Math.min(1, (o.stats[k] - lo) / (hi - lo)));
+      return `<span class="stat">${label}<i style="--v:${Math.round(v * 100)}%"></i></span>`;
+    }).join('');
+  }
+
+  /** Choix de l'adversaire : celui du niveau, ou un boxeur au style marqué. */
+  _opponentPanel() {
+    const current = BOXERS[this.settings.get('opponent')] ? this.settings.get('opponent') : 'auto';
+    const d = DIFFICULTIES[this.settings.get('difficulty')] || DIFFICULTIES.intermediate;
+    const auto = BOXERS[d.opponent];
+    const card = (id, title, sub, tag) => `<button type="button" class="card mini ${id === current ? 'selected' : ''}" data-opp="${id}" aria-pressed="${id === current}">
+        <span class="lvl">${esc(title)}</span>
+        <span class="who">${esc(sub)}</span>
+        <span class="tag">${esc(tag)}</span>
+      </button>`;
+    const cards = [card('auto', 'Selon le niveau', `${auto.name} (${d.label})`, 'Auto')]
+      .concat(OPPONENT_ORDER.map((id) => {
+        const o = BOXERS[id];
+        const st = FIGHT_STYLES[o.fightStyle] || FIGHT_STYLES.standard;
+        return card(id, o.nickname, o.name, st.id === 'standard' ? 'Complet' : st.label);
+      })).join('');
+    const o = current === 'auto' ? auto : BOXERS[current];
+    const st = FIGHT_STYLES[o.fightStyle] || FIGHT_STYLES.standard;
+    const node = el(`
+      <div>
+        <h2 class="panel-title">Adversaire</h2>
+        <p class="panel-sub">Le niveau règle ses réflexes et sa lecture du combat ; le boxeur choisit sa façon de boxer.</p>
+        <div class="cards roster">${cards}</div>
+        <div class="opp-detail">
+          <div class="opp-head"><b>${esc(o.name)}</b> · « ${esc(o.nickname)} » <span class="tag">${esc(st.label)}</span></div>
+          <p>${esc(o.style)}</p>
+          <div class="bars">${this._bars(o)}</div>
+        </div>
+      </div>`);
+    node.querySelector('.cards').addEventListener('click', (e) => {
+      const c = e.target.closest('.card');
+      if (!c) return;
+      this.settings.set('opponent', c.dataset.opp);
+      this.onSound('ui_click');
+      this.refresh();
+      this.showPanel('opponent');
+    });
+    return node;
   }
 
   /** Affiche du combat : comparaison des deux boxeurs. */
   _posterPanel() {
     const d = DIFFICULTIES[this.settings.get('difficulty')] || DIFFICULTIES.intermediate;
-    const o = BOXERS[d.opponent];
+    const o = opponentFor(this.settings.get('opponent'), d);
+    const st = FIGHT_STYLES[o.fightStyle] || FIGHT_STYLES.standard;
     const t = o.tape;
     const row = (a, l, b) => `<tr><td>${esc(a)}</td><td>${esc(l)}</td><td>${esc(b)}</td></tr>`;
     return el(`
@@ -131,6 +192,7 @@ export class Menu {
         </table>
         <div class="fight-format">
           <span>Niveau <b>${esc(d.label)}</b></span>
+          ${st.id !== 'standard' ? `<span>Style <b>${esc(st.label)}</b></span>` : ''}
           <span><b>${this.settings.get('rounds')}</b> rounds de <b>${this.settings.get('roundDuration')} s</b></span>
         </div>
         <p class="hint">${esc(o.style)}</p>
@@ -142,10 +204,7 @@ export class Menu {
     const cards = DIFFICULTY_ORDER.map((id) => {
       const d = DIFFICULTIES[id];
       const o = BOXERS[d.opponent];
-      const bars = STAT_LABELS.map(([k, label, lo, hi]) => {
-        const v = Math.max(0.08, Math.min(1, (o.stats[k] - lo) / (hi - lo)));
-        return `<span class="stat">${label}<i style="--v:${Math.round(v * 100)}%"></i></span>`;
-      }).join('');
+      const bars = this._bars(o);
       return `<button type="button" class="card ${id === current ? 'selected' : ''}" data-diff="${id}" aria-pressed="${id === current}">
           <span class="lvl">${esc(d.label)}</span>
           <span class="who">${esc(o.name)} · « ${esc(o.nickname)} »</span>
@@ -158,7 +217,7 @@ export class Menu {
     const node = el(`
       <div>
         <h2 class="panel-title">Difficulté</h2>
-        <p class="panel-sub">Chaque niveau a son propre adversaire et sa propre façon de boxer.</p>
+        <p class="panel-sub">Chaque niveau a son propre adversaire. Pour affronter un autre style au même niveau, passez par « Adversaire ».</p>
         <div class="cards">${cards}</div>
         <div class="field">
           <div class="label">Nombre de rounds</div>
@@ -205,11 +264,18 @@ export class Menu {
       const keys = c.keys.map((k) => (k.startsWith('+') ? `<em>${esc(k)}</em>` : `<kbd>${esc(k)}</kbd>`)).join('');
       return `<div class="keys">${keys}${c.alt ? `<em>${esc(c.alt)}</em>` : ''}</div><div>${esc(c.action)}</div>`;
     }).join('');
+    const padRows = PAD_HELP.map((c) => {
+      const keys = c.keys.map((k) => (k.startsWith('+') ? `<em>${esc(k)}</em>` : `<kbd>${esc(k)}</kbd>`)).join('');
+      return `<div class="keys">${keys}</div><div>${esc(c.action)}</div>`;
+    }).join('');
     const combos = COMBOS.map((c) => `<li><b>${esc(c.name)}</b> · +${Math.round(c.damageBonus * 100)} % sur le dernier coup</li>`).join('');
     return el(`
       <div>
         <h2 class="panel-title">Commandes</h2>
         <div class="controls-list">${rows}</div>
+        <h3 class="panel-h3">Manette</h3>
+        <div class="controls-list">${padRows}</div>
+        <p class="hint">Branchez une manette et appuyez sur un bouton : elle est reconnue tout de suite. Dans les menus, la croix choisit, A valide, B revient. Au tapis, martelez les boutons de coups pour vous relever.</p>
         <p class="hint">Visez la tête ou le corps avec le regard. Les coups au corps vident l'endurance adverse ; regarder vers le bas en gardant protège le ventre.</p>
         <p class="hint">Esquives : de côté contre les directs et uppercuts, tête baissée contre les directs et crochets, recul contre tout. Un coup placé juste après une esquive ou un blocage est un contre.</p>
         <ul class="combo-list">${combos}</ul>

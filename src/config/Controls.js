@@ -8,28 +8,34 @@
  *
  * Boutons de souris : 'Mouse0' gauche, 'Mouse1' milieu, 'Mouse2' droit,
  * 'Mouse3' / 'Mouse4' boutons latéraux.
+ *
+ * Manette (disposition « standard » de la Gamepad API, noms Xbox) :
+ *   'Pad0' A, 'Pad1' B, 'Pad2' X, 'Pad3' Y, 'Pad4' LB, 'Pad5' RB,
+ *   'Pad6' LT, 'Pad7' RT, 'Pad8' Back/View, 'Pad9' Start/Menu,
+ *   'Pad10' L3, 'Pad11' R3, 'Pad12'-'Pad15' croix (haut, bas, gauche, droite).
+ *   Stick gauche : 'PadUp' 'PadDown' 'PadLeft' 'PadRight'. Stick droit : regard.
  */
 
 export const CONTROLS = {
-  forward: ['KeyW', 'KeyZ', 'ArrowUp'],
-  back: ['KeyS', 'ArrowDown'],
-  left: ['KeyA', 'KeyQ', 'ArrowLeft'],
-  right: ['KeyD', 'ArrowRight'],
+  forward: ['KeyW', 'KeyZ', 'ArrowUp', 'PadUp', 'Pad12'],
+  back: ['KeyS', 'ArrowDown', 'PadDown', 'Pad13'],
+  left: ['KeyA', 'KeyQ', 'ArrowLeft', 'PadLeft', 'Pad14'],
+  right: ['KeyD', 'ArrowRight', 'PadRight', 'Pad15'],
 
-  guard: ['Space'],
-  dodge: ['ShiftLeft', 'ShiftRight'], // + direction : esquive latérale / recul / baisser la tête
-  duck: ['KeyC'],
+  guard: ['Space', 'Pad6'],
+  dodge: ['ShiftLeft', 'ShiftRight', 'Pad7'], // + direction : esquive latérale / recul / baisser la tête
+  duck: ['KeyC', 'Pad10', 'Pad11'],
 
-  jab: ['Mouse0'],
-  cross: ['Mouse2'],
-  hookL: ['KeyE', 'Mouse3'],
-  hookR: ['KeyR', 'Mouse4'],
-  upperL: ['KeyF'],
-  upperR: ['KeyG'],
+  jab: ['Mouse0', 'Pad2'],
+  cross: ['Mouse2', 'Pad3'],
+  hookL: ['KeyE', 'Mouse3', 'Pad0'],
+  hookR: ['KeyR', 'Mouse4', 'Pad1'],
+  upperL: ['KeyF', 'Pad4'],
+  upperR: ['KeyG', 'Pad5'],
 
-  pause: ['Escape', 'KeyP'],
-  toggleHelp: ['KeyH'],
-  skip: ['Enter', 'Space'],
+  pause: ['Escape', 'KeyP', 'Pad9'],
+  toggleHelp: ['KeyH', 'Pad8'],
+  skip: ['Enter', 'Space', 'Pad0'],
 };
 
 /** Libellés affichés dans l'aide (HUD, menu « Commandes »). */
@@ -46,6 +52,22 @@ export const CONTROL_HELP = [
   { keys: ['Maj', '+ direction'], action: 'Esquive : côté, recul ou tête baissée' },
   { keys: ['C'], action: 'Baisser la tête' },
   { keys: ['Échap'], action: 'Pause' },
+];
+
+/** Aide pour la manette (menu « Commandes », HUD quand la manette est utilisée). */
+export const PAD_HELP = [
+  { keys: ['Stick G'], action: 'Se déplacer' },
+  { keys: ['Stick D'], action: 'Regarder et viser (tête ou corps)' },
+  { keys: ['X'], action: 'Jab (gauche)' },
+  { keys: ['Y'], action: 'Direct (droit)' },
+  { keys: ['A'], action: 'Crochet gauche' },
+  { keys: ['B'], action: 'Crochet droit' },
+  { keys: ['LB'], action: 'Uppercut gauche' },
+  { keys: ['RB'], action: 'Uppercut droit' },
+  { keys: ['LT'], action: 'Garde (maintenir)' },
+  { keys: ['RT', '+ stick G'], action: 'Esquive : côté, recul ou tête baissée' },
+  { keys: ['L3'], action: 'Baisser la tête' },
+  { keys: ['Start'], action: 'Pause' },
 ];
 
 export const PUNCH_ACTIONS = ['jab', 'cross', 'hookL', 'hookR', 'upperL', 'upperR'];

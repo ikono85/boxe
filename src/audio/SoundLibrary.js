@@ -38,6 +38,7 @@ export const SOUND_LIBRARY = {
   // Ring
   bell: { synth: (sr) => S.bell(sr), category: 'sfx', volume: 0.75, reverb: true },
   clapper: { synth: (sr) => S.clapper(sr), category: 'sfx', volume: 0.6, reverb: true },
+  count: { synth: (sr) => S.impact(sr, { dur: 0.22, f0: 130, f1: 70, thump: 1, crack: 0.12, crackHp: 1200, body: 0.6, decay: 0.05 }), category: 'sfx', volume: 0.8, reverb: true },
 
   // Public
   crowd_ambience: { synth: (sr) => S.crowdLoop(sr), category: 'ambience', volume: 0.55, loop: true },

@@ -115,3 +115,48 @@ test('rollback : prédiction fausse puis correction = même combat', () => {
   }
   assert.equal(JSON.stringify(captureState(local)), JSON.stringify(captureState(truth)));
 });
+
+test('knockdown en ligne : compte, relevé en martelant, rollback pendant le compte', () => {
+  // Le joueur 0 frappe sans arrêt ; le joueur 1 ne se défend pas, puis martèle ses coups au tapis
+  const attacker = (world) => {
+    const f = world.fighters[0];
+    const o = world.fighters[1];
+    const yaw = Math.atan2(-(o.position.x - f.position.x), -(o.position.z - f.position.z));
+    const d = Math.hypot(o.position.x - f.position.x, o.position.z - f.position.z);
+    const punches = world.tick % 14 === 0 ? 1 << (world.tick % 28 === 0 ? 1 : 2) : 0;
+    return packCommand({ mx: 0, mz: d > 0.95 ? 1 : 0, guard: false, dodgeHeld: false, dirPressed: false, duck: false, dodge: false, punches, yaw, pitch: 0 });
+  };
+  const victim = (world) => {
+    const f = world.fighters[1];
+    const mash = f.ko && world.tick % 4 === 0 ? 1 : 0;
+    return packCommand({ mx: 0, mz: 0, guard: false, dodgeHeld: false, dirPressed: false, duck: false, dodge: false, punches: mash, yaw: f.yaw, pitch: 0 });
+  };
+  const A = makeWorld();
+  const seen = new Set();
+  let snapAt = null;
+  let snap = null;
+  const cmds = [];
+  for (let t = 0; t < 60 * 60 && !A.over; t++) {
+    const c = [attacker(A), victim(A)];
+    cmds.push(c);
+    A.step(c);
+    for (const e of A.drain()) seen.add(e.type);
+    if (!snap && A.rounds.phase === 'count' && A.rounds.count.n === 2) {
+      snap = JSON.stringify(captureState(A));
+      snapAt = cmds.length;
+    }
+    if (seen.has('count:end')) break;
+  }
+  assert.ok(seen.has('fighter:down'), 'un knockdown doit arriver');
+  assert.ok(seen.has('count:tick'), "l'arbitre doit compter");
+  assert.ok(seen.has('count:up'), 'le joueur qui martèle doit se relever');
+  assert.ok(seen.has('count:end'), 'le combat doit reprendre après le compte');
+  assert.equal(A.rounds.phase, 'fighting');
+  assert.ok(A.fighters[1].hp > 0 && !A.fighters[1].ko);
+
+  // Rejouer depuis une photo prise pendant le compte donne le même état
+  const B = makeWorld();
+  restoreState(B, JSON.parse(snap));
+  for (let i = snapAt; i < cmds.length; i++) B.step(cmds[i]);
+  assert.equal(JSON.stringify(captureState(B)), JSON.stringify(captureState(A)));
+});

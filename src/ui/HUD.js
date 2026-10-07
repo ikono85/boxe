@@ -5,7 +5,8 @@
  *  - en haut : vie et endurance des deux boxeurs, round et chrono ;
  *  - au centre : réticule (tête / corps), marqueur d'impact, messages
  *    (combo, contre, critique, bloqué, esquivé…) ;
- *  - en bas : commandes, état de la garde, endurance, score.
+ *  - en bas : commandes, état de la garde, endurance, score ;
+ *  - knockdown : compte de l'arbitre et, si c'est vous, la jauge pour vous relever.
  * Le DOM n'est modifié que lorsque les valeurs changent.
  */
 
@@ -48,6 +49,15 @@ export class HUD {
           <div class="zone" data-id="zone"></div>
         </div>
         <div class="feed" data-id="feed" aria-live="polite"></div>
+        <div class="count-box" data-id="count" hidden>
+          <div class="count-n" data-id="countn"></div>
+          <div class="count-who" data-id="countwho"></div>
+          <div class="mash" data-id="mash" hidden>
+            <div class="mash-title">Relevez-vous !</div>
+            <div class="mash-bar"><b data-id="mashfill"></b></div>
+            <div class="mash-hint" data-id="mashhint">Martelez vos coups</div>
+          </div>
+        </div>
         <div class="lock-hint" data-id="lock" hidden>Cliquez pour reprendre le combat</div>
         <div class="fps" data-id="fps" hidden></div>
 
@@ -59,6 +69,14 @@ export class HUD {
             <span class="k"><kbd>Espace</kbd></span><span>Garde (regard bas = corps)</span>
             <span class="k"><kbd>Maj</kbd> + dir.</span><span>Esquive</span>
             <span class="k"><kbd>H</kbd></span><span>Masquer l'aide</span>
+          </div>
+          <div class="legend" data-id="legendPad" hidden>
+            <span class="k"><kbd>X</kbd> <kbd>Y</kbd></span><span>Jab · Direct</span>
+            <span class="k"><kbd>A</kbd> <kbd>B</kbd></span><span>Crochets</span>
+            <span class="k"><kbd>LB</kbd> <kbd>RB</kbd></span><span>Uppercuts</span>
+            <span class="k"><kbd>LT</kbd></span><span>Garde (regard bas = corps)</span>
+            <span class="k"><kbd>RT</kbd> + stick</span><span>Esquive</span>
+            <span class="k"><kbd>Back</kbd></span><span>Masquer l'aide</span>
           </div>
           <div class="status">
             <div class="pill" data-id="guard">Garde</div>
@@ -155,7 +173,7 @@ export class HUD {
     // États sous les barres
     const chipsFor = (f) => {
       const list = [];
-      if (f.ko) list.push(['danger', 'KO']);
+      if (f.ko) list.push(['danger', s.phase === 'count' ? 'Au tapis' : 'KO']);
       else if (f.isStunned) list.push(['danger', 'Sonné']);
       if (!f.ko && f.guard.brokenTimer > 0) list.push(['danger', 'Garde brisée']);
       if (!f.ko && f.stamina.isExhausted()) list.push(['warn', 'Essoufflé']);
@@ -196,7 +214,24 @@ export class HUD {
     const ms = player.matchStats;
     this._text('acc', ms.thrown ? `${ms.landed} / ${ms.thrown} coups · ${Math.round((ms.landed / ms.thrown) * 100)} %` : 'Aucun coup lancé');
 
-    this.$.legend.hidden = !s.showControls;
+    // Compte de l'arbitre
+    const c = s.phase === 'count' ? s.count : null;
+    this.$.count.hidden = !c;
+    if (c) {
+      const me = c.fighter === player;
+      this._text('countn', c.n > 0 ? String(c.n) : '');
+      this._text('countwho', c.up ? (me ? 'Debout ! Compte obligatoire' : `${c.fighter.name.split(' ')[0]} est debout`)
+        : me ? 'Vous êtes au tapis' : `${c.fighter.name.split(' ')[0]} est au tapis`);
+      const mash = me && player.ko && player.down.counting && !player.autoRise;
+      this.$.mash.hidden = !mash;
+      if (mash) {
+        this._scale('mashfill', this.$.mashfill, Math.min(1, player.down.meter / player.down.need));
+        this._text('mashhint', s.pad ? 'Martelez Ⓐ Ⓑ Ⓧ Ⓨ ou les gâchettes' : 'Martelez vos coups (clics, E, R, F, G)');
+      }
+    }
+
+    this.$.legend.hidden = !s.showControls || !!s.pad;
+    this.$.legendPad.hidden = !s.showControls || !s.pad;
     if (s.fps !== null && s.fps !== undefined) {
       this.$.fps.hidden = false;
       this._text('fps', `${s.fps} FPS`);
@@ -212,6 +247,14 @@ export class HUD {
     feed.appendChild(item);
     while (feed.children.length > 3) feed.firstElementChild.remove();
     setTimeout(() => item.remove(), 1350);
+  }
+
+  /** Le chiffre du compte « tombe » à chaque seconde. */
+  countPulse() {
+    const n = this.$.countn;
+    n.classList.remove('pulse');
+    void n.offsetWidth;
+    n.classList.add('pulse');
   }
 
   /** Marqueur d'impact au centre. kind : '' | 'crit' | 'block' */

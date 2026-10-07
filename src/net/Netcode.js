@@ -24,7 +24,7 @@ import { OnlineWorld, SIM_HZ, DT, eventKey } from './OnlineWorld.js';
 import { captureState, restoreState } from './SimState.js';
 import { NO_COMMAND, PRESSED_BITS, predictCommand, sameCommand, sanitizeCommand } from './Command.js';
 
-export const NET_VER = 2; // 2 : personnage X Bot (une ancienne version en cache reçoit « Versions différentes »)
+export const NET_VER = 3; // 3 : knockdowns et compte de l'arbitre (une ancienne version en cache reçoit « Versions différentes »)
 const NET_DELAY = 2; // mes commandes s'appliquent 2 ticks plus tard (33 ms) : moins de corrections
 const NET_MAX_AHEAD = 40; // plus de 0,66 s d'avance sur ce qu'on sait de l'adversaire : on l'attend
 const NET_SYNC_EVERY = 30; // l'hôte envoie son état toutes les 0,5 s

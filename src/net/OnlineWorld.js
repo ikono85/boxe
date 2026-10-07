@@ -7,7 +7,7 @@
  *
  *  - fighters[0] = l'hôte, coin rouge (côté +Z) ; fighters[1] = l'invité, coin bleu ;
  *  - un bus d'événements propre à la simulation : les règles qui modifient
- *    l'état (KO → fin du match, intro de round → replacement et récupération)
+ *    l'état (knockdown → compte de l'arbitre, intro de round → replacement et récupération)
  *    sont branchées ici, pas dans l'affichage ;
  *  - les événements d'un tick sont mis de côté (`drain()`) : le netcode les
  *    présente une seule fois, même si le tick est recalculé après une correction ;
@@ -66,7 +66,7 @@ export class OnlineWorld {
     };
 
     // --- Règles de la simulation (et non de l'affichage) ---
-    this.bus.on('fighter:ko', ({ fighter }) => this.rounds.registerKO(fighter));
+    this.bus.on('fighter:down', ({ fighter }) => this.rounds.registerKnockdown(fighter));
     this.bus.on('round:intro', ({ round }) => {
       if (round > 1) {
         for (const f of this.fighters) {

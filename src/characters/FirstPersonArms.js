@@ -150,7 +150,8 @@ export class FirstPersonArms {
     const moving = clamp(player.moveSpeed / 2.5, 0, 1);
     const bounce = Math.sin(t * Math.PI * 2 * 1.7) * 0.006 + Math.sin(t * 9.5) * 0.009 * moving;
     const breath = Math.sin(t * 1.9) * 0.004;
-    const koDrop = player.ko ? Ease.inCubic(clamp(player.koTime / 0.9, 0, 1)) * 0.75 : 0;
+    let koDrop = player.ko ? Ease.inCubic(clamp(player.koTime / 0.9, 0, 1)) * 0.75 : 0;
+    if (!player.ko && player.down && player.down.riseT < 1.1) koDrop = (1 - Ease.outCubic(clamp(player.down.riseT / 1.1, 0, 1))) * 0.75;
 
     for (const h of [this.hands.left, this.hands.right]) {
       const punch = player.punches.hands[h.hand];

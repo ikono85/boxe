@@ -38,6 +38,21 @@ export const GameConfig = {
     breakHpRecovery: 0.06, // petite récupération de vie entre les rounds
   },
 
+  /** Knockdowns : compte de l'arbitre, relevé, KO technique. */
+  knockdown: {
+    countDelay: 1.25, // chute avant le « 1 » (s)
+    interval: 0.95, // un chiffre par… (s)
+    fastInterval: 0.6, // compte obligatoire jusqu'à 8 une fois relevé
+    mandatory: 8, // compte obligatoire
+    minRiseCount: 2, // on ne se relève pas avant « 2 »
+    maxPerRound: 3, // 3e knockdown dans le round = KO technique
+    riseDuration: 1.1, // temps pour se relever (animation)
+    hpAfter: [0.6, 0.45, 0.32], // vie retrouvée après le 1er / 2e / 3e knockdown
+    mashNeed: [6, 9, 13], // joueur : appuis sur les coups pour se relever
+    mashDecay: 1.3, // appuis « perdus » par seconde
+    standAway: 2.1, // l'autre boxeur recule à cette distance
+  },
+
   fighter: {
     maxHp: 100,
     maxStamina: 100,

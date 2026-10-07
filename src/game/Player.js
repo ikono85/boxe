@@ -18,6 +18,7 @@ import { commandFromInput, pressedMask, emptyCommand } from '../net/Command.js';
 
 const CAM = GameConfig.camera;
 const AIM = GameConfig.aim;
+const KD = GameConfig.knockdown;
 const VM = GameConfig.viewmodel;
 
 const _look = { x: 0, y: 0 };
@@ -96,6 +97,12 @@ export class Player extends Fighter {
    * deux navigateurs l'appliquent au même tick avec les mêmes valeurs.
    */
   applyCommand(c, dt) {
+    // Au tapis : marteler les coups pour se relever avant 10
+    if (this.ko && this.down.counting && !this.autoRise) {
+      const D = this.down;
+      D.meter = Math.max(0, D.meter - KD.mashDecay * dt);
+      for (let b = c.punches; b; b &= b - 1) D.meter += 1;
+    }
     if (!this.ko && !this.lookLocked) {
       this.yaw = c.yaw;
       this.pitch = clamp(c.pitch, CAM.pitchMin, CAM.pitchMax);
