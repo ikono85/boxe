@@ -2,16 +2,14 @@
   "name": "boxing-arena",
   "private": true,
   "version": "1.0.0",
-  "description": "Jeu de boxe FPS arcade jouable dans le navigateur (Three.js + Vite)",
+  "description": "Salle de boxe 3D dans le navigateur (Three.js + Vite) — ring, public et caméra, sans combattants",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "build:standalone": "vite build && node scripts/build-standalone.mjs",
-    "simulate": "node scripts/simulate.mjs",
-    "optimize:ring": "node scripts/optimize-ring.mjs",
-    "test": "node --test tests/net.test.mjs"
+    "optimize:ring": "node scripts/optimize-ring.mjs"
   },
   "dependencies": {
     "peerjs": "^1.5.5",

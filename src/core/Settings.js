@@ -18,12 +18,6 @@ export const DEFAULT_SETTINGS = {
   aimAssist: true,
   showFps: false,
   showControls: true,
-  difficulty: 'intermediate',
-  opponent: 'auto', // 'auto' = l'adversaire du niveau, sinon une clé de BOXERS
-  rounds: 3,
-  roundDuration: 60,
-  netName: '', // en ligne : nom affiché à l'adversaire
-  netSkin: 'xbot', // en ligne : personnage (ancienne clé netModel ignorée : X Bot par défaut)
 };
 
 function safeRead(key) {
