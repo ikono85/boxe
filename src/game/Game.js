@@ -8,7 +8,7 @@
  * Boucle (requestAnimationFrame) :
  *   1. temps réel → temps de jeu (gel d'image à l'impact, ralenti du KO) ;
  *   2. entrées du joueur, IA, logique des boxeurs, combat, rounds ;
- *   3. animations (poings FPS, modèle adverse), caméra, salle, effets, HUD ;
+ *   3. caméra, salle, effets, HUD ;
  *   4. rendu.
  *
  * Les systèmes communiquent par le bus d'événements : ce fichier abonne le
@@ -31,9 +31,6 @@ import { CombatSystem } from './CombatSystem.js';
 import { RoundSystem } from './RoundSystem.js';
 import { AI } from './AI.js';
 import { Arena } from '../world/Arena.js';
-import { Referee } from '../world/Referee.js';
-import { createBoxerModel } from '../characters/createBoxerModel.js';
-import { FirstPersonArms } from '../characters/FirstPersonArms.js';
 import { CameraRig } from '../fx/CameraRig.js';
 import { ImpactEffects } from '../fx/ImpactEffects.js';
 import { ScreenEffects } from '../fx/ScreenEffects.js';
@@ -108,12 +105,6 @@ export class Game {
     this.combat.setFighters(this.player, this.opponent);
     this.rounds = new RoundSystem(this.events);
     this.ai = new AI(this.opponent, buildAIProfile(this.difficulty, this.opponent.profile), this.events);
-    this.opponentModel = createBoxerModel(this.opponent.profile);
-    this.scene.add(this.opponentModel.root);
-    this.referee = new Referee();
-    this.scene.add(this.referee.root);
-    this.referee.ready.then(() => this.applyQualityToModel());
-    this.arms = new FirstPersonArms(this.camera, { skinColor: BOXERS.player.look.skin });
     this._buildPlayerShadow();
 
     // --- Caméra, son, entrées ---
@@ -203,8 +194,6 @@ export class Game {
     this.player.frozen = true;
     this.cameraRig.setMode('orbit');
     this.cameraRig.resetEffects();
-    this.arms.setVisible(false);
-    this.referee.setVisible(false);
     this.playerShadow.visible = false;
     this.hud.hide();
     this.pauseMenu.hide();
@@ -255,9 +244,6 @@ export class Game {
     this.state = 'fight';
     this.matchActive = true;
     this.cameraRig.setMode('fight', { transition: prev === 'menu' || prev === 'results' });
-    this.arms.setVisible(true);
-    this.referee.setVisible(true);
-    this.referee.resetPosition();
     this.playerShadow.visible = true;
     this.hud.setFighters(this.player, this.opponent, { opponentSub: `« ${this.opponent.profile.nickname} » · ${this.difficulty.label}` });
     this.hud.show();
@@ -353,10 +339,6 @@ export class Game {
     this.ai.setProfile(buildAIProfile(diff, boxer));
     if (changed) {
       this.opponent.setProfile(boxer);
-      this.opponentModel.dispose();
-      this.opponentModel = createBoxerModel(this.opponent.profile);
-      this.scene.add(this.opponentModel.root);
-      this.applyQualityToModel();
     }
   }
 
@@ -381,23 +363,10 @@ export class Game {
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.pixelRatio));
       this.arena.applyQuality(this.renderer, s.quality);
       this.effects.setQuality(s.quality);
-      this.applyQualityToModel();
       this.resize();
     }
   }
 
-  applyQualityToModel() {
-    const shadows = (GameConfig.quality[this.settings.get('quality')] || {}).shadows;
-    const apply = (root) => root.traverse((o) => {
-      if (o.isMesh) o.castShadow = !!shadows;
-    });
-    // Les personnages se chargent en arrière-plan : on règle aussi ce qui arrive après
-    for (const m of [this.opponentModel, this.referee]) {
-      if (!m) continue;
-      apply(m.root);
-      if (m.ready) m.ready.then(() => apply(m.root));
-    }
-  }
 
   resize() {
     const w = Math.max(1, this.canvas.clientWidth);
@@ -786,7 +755,6 @@ export class Game {
     this.screenFx.setFade(0);
     this.cameraRig.zoomTarget = 0;
     this.cameraRig.setMode('results', { transition: false });
-    this.arms.setVisible(false);
     this.playerShadow.visible = false;
     if (r.method !== 'KO') {
       this.audio.play('bell', { minGap: 0 });
@@ -827,10 +795,6 @@ export class Game {
     this.opponent = o;
     this.rounds = world.rounds;
     this.combat = world.combat;
-    this.opponentModel.dispose();
-    this.opponentModel = createBoxerModel(o.profile);
-    this.scene.add(this.opponentModel.root);
-    this.applyQualityToModel();
     world.start(st.seed);
     this.view.yaw = p.yaw;
     this.view.pitch = 0;
@@ -855,9 +819,6 @@ export class Game {
     this.state = 'fight';
     this.matchActive = true;
     this.cameraRig.setMode('fight', { transition: prev === 'menu' || prev === 'results' });
-    this.arms.setVisible(true);
-    this.referee.setVisible(true);
-    this.referee.resetPosition();
     this.playerShadow.visible = true;
     this.hud.setFighters(p, o, { opponentSub: 'En ligne' });
     this.hud.show();
@@ -961,7 +922,6 @@ export class Game {
     this.screenFx.setFade(0);
     this.cameraRig.zoomTarget = 0;
     this.cameraRig.setMode('results', { transition: false });
-    this.arms.setVisible(false);
     this.playerShadow.visible = false;
     if (r.method !== 'KO') {
       this.audio.play('bell', { minGap: 0 });
@@ -1014,10 +974,6 @@ export class Game {
       this.rounds = this.offline.rounds;
       this.combat = this.offline.combat;
       this.offline = null;
-      this.opponentModel.dispose();
-      this.opponentModel = createBoxerModel(this.opponent.profile);
-      this.scene.add(this.opponentModel.root);
-      this.applyQualityToModel();
     }
     this.enterMenu();
     if (notice) this.onlinePanel.setNotice(notice);
@@ -1117,7 +1073,6 @@ export class Game {
     this.ai.update(dt);
     o.update(dt);
     if (o.stamina.ratio < 0.3) o.stamina.recover(1);
-    this.opponentModel.update(dt, o);
     this.cameraRig.update(dt, ghost, o);
     this.effects.update(dt);
     this.arena.update(dt, this.camera.position, o.position, [o]);
@@ -1149,15 +1104,12 @@ export class Game {
     this._presentFight(dt, realDt);
   }
 
-  /** Affichage du combat (modèles, poings, caméra, salle, HUD) : commun au solo et au jeu en ligne. */
+  /** Affichage du combat (caméra, salle, HUD) : commun au solo et au jeu en ligne. */
   _presentFight(dt, realDt) {
     const p = this.player;
     const o = this.opponent;
     const r = this.rounds;
     const victory = r.phase === 'ko' || r.phase === 'over';
-    this.opponentModel.update(dt, o, { victory: victory && p.ko && p.koTime > 1.2, camera: p.eye });
-    this.arms.update(dt, realDt, p, { victory: victory && o.ko && o.koTime > 1 });
-    this.referee.update(dt, { phase: r.phase, count: r.count, fighters: [p, o], result: r.result });
     this.cameraRig.update(realDt, p, o);
     this.effects.update(dt);
     this.arena.update(dt, this.camera.position, o.position, [p, o]);
@@ -1197,8 +1149,6 @@ export class Game {
     o.frozen = true;
     p.update(dt);
     o.update(dt);
-    this.opponentModel.update(dt, o, { victory: p.ko });
-    this.referee.update(dt, { phase: this.rounds.phase, count: null, fighters: [p, o], result: this.rounds.result });
     this.cameraRig.update(dt, p, o);
     this.effects.update(dt);
     this.arena.update(dt, this.camera.position, o.position, [p, o]);
@@ -1244,9 +1194,6 @@ export class Game {
     this.ai.dispose();
     this.arena.dispose();
     this.effects.dispose();
-    this.opponentModel.dispose();
-    this.referee.dispose();
-    this.arms.dispose();
     this.renderer.dispose();
     this.events.clear();
   }

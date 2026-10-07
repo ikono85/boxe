@@ -3,7 +3,7 @@
  * ------------------------------------------------------------------
  * Boxeur contrôlé par l'IA. Il utilise exactement les mêmes règles que le
  * joueur (endurance, timings, détection) : l'IA ne triche pas, elle décide.
- * Le modèle 3D (BoxerModel) lit son état à chaque frame.
+ * Son état est lu à chaque frame par l'affichage.
  */
 
 import { Vector3 } from 'three';
